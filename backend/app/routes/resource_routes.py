@@ -23,7 +23,16 @@ def list_resources(
     if user.role != "admin":
         query = query.filter(Resource.department == user.department)
     resources = query.order_by(Resource.id).all()
-    return [ResourceRead.model_validate(resource) for resource in resources]
+    return [
+        ResourceRead.model_validate({
+            **{
+                field: getattr(resource, field)
+                for field in ResourceRead.model_fields
+            },
+            "content": "Harmless HoneyGate demo file." if resource.is_decoy else resource.content,
+        })
+        for resource in resources
+    ]
 
 
 # TODO: Monitored resource access pipeline will be implemented in prompt 2.

@@ -1,5 +1,6 @@
 """Alert, incident, response, and policy administration routes."""
 
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,11 +13,34 @@ from app.models.incident import Alert, Incident, Policy
 from app.models.session import Session as SessionModel
 from app.models.user import User
 from app.routes import paginate
+from app.services.audit_integrity import verify_snapshot
 from app.services.incident_service import incident_timeline
 from app.services.policy_engine import apply_response_action
 
 router = APIRouter(prefix="/api", tags=["Monitoring administration"])
 ADMIN_ANALYST = Depends(require_role("admin", "analyst"))
+security_logger = logging.getLogger("honeygate.security")
+COUNT_OR_WINDOW_POLICIES = {
+    "window_minutes",
+    "max_files_per_window",
+    "max_searches_per_window",
+    "velocity_burst_max_requests",
+    "velocity_burst_window_seconds",
+    "resource_enumeration_min_resources",
+    "resource_enumeration_min_sequential",
+    "resource_enumeration_min_departments",
+    "resource_enumeration_window_seconds",
+    "privilege_probing_min_denials",
+    "privilege_probing_window_minutes",
+    "impossible_travel_max_speed_kmh",
+    "login_attack_min_usernames",
+    "login_attack_min_failures",
+    "login_attack_window_minutes",
+    "slow_and_low_window_minutes",
+    "slow_and_low_max_sensitive_requests",
+    "risk_decay_interval_minutes",
+}
+HOUR_POLICIES = {"working_hours_start_hour", "working_hours_end_hour"}
 
 
 class AlertUpdateRequest(BaseModel):
@@ -26,7 +50,7 @@ class AlertUpdateRequest(BaseModel):
 
 class IncidentUpdateRequest(BaseModel):
     status: Literal["open", "investigating", "resolved"] | None = None
-    analyst_notes: str | None = None
+    analyst_notes: str | None = Field(default=None, max_length=10_000)
 
 
 class ResponseActionRequest(BaseModel):
@@ -38,11 +62,11 @@ class ResponseActionRequest(BaseModel):
         "suspend_user",
         "mark_device_revoked",
     ] = Field(description="Simulated action only; no external systems are contacted.")
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=10_000)
 
 
 class PolicyUpdateRequest(BaseModel):
-    value: float = Field(description="Policy weight or threshold value")
+    value: float = Field(description="Policy weight or threshold value", ge=0, le=10000)
     enabled: bool | None = None
 
 
@@ -53,9 +77,9 @@ class PolicyUpdateRequest(BaseModel):
     dependencies=[ADMIN_ANALYST],
 )
 def list_alerts(
-    severity: str | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-    page: int = Query(default=1, ge=1),
+    severity: Literal["low", "medium", "high", "critical"] | None = Query(default=None),
+    status_filter: Literal["open", "acknowledged", "resolved"] | None = Query(default=None, alias="status"),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -99,7 +123,7 @@ def update_alert(
     alert = db.get(Alert, alert_id)
     if alert is None:
         raise HTTPException(status_code=404, detail="Alert not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    for key, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
         setattr(alert, key, value)
     db.commit()
     db.refresh(alert)
@@ -122,9 +146,9 @@ def update_alert(
     dependencies=[ADMIN_ANALYST],
 )
 def list_incidents(
-    severity: str | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-    page: int = Query(default=1, ge=1),
+    severity: Literal["low", "medium", "high", "critical"] | None = Query(default=None),
+    status_filter: Literal["open", "investigating", "resolved"] | None = Query(default=None, alias="status"),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -175,6 +199,7 @@ def get_incident(incident_id: int, db: Session = Depends(get_db)) -> dict:
         "analyst_notes": incident.analyst_notes,
         "created_at": incident.created_at,
         "evidence_snapshot": incident.evidence_snapshot or {},
+        "evidence_integrity": verify_snapshot(incident.evidence_snapshot),
         "timeline": incident_timeline(db, incident),
     }
 
@@ -193,7 +218,10 @@ def update_incident(
     incident = db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("status") is None:
+        changes.pop("status")
+    for key, value in changes.items():
         setattr(incident, key, value)
     db.commit()
     db.refresh(incident)
@@ -266,6 +294,7 @@ def list_policies(db: Session = Depends(get_db)) -> list[dict]:
 def update_policy(
     policy_id: int,
     payload: PolicyUpdateRequest,
+    context: tuple[User, SessionModel] = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> dict:
     import math
@@ -275,9 +304,12 @@ def update_policy(
         raise HTTPException(status_code=404, detail="Policy not found")
     if not math.isfinite(payload.value):
         raise HTTPException(status_code=422, detail="Policy value must be finite")
-    if policy.rule_key in {"window_minutes", "max_files_per_window", "max_searches_per_window"}:
+    if policy.rule_key in COUNT_OR_WINDOW_POLICIES:
         if payload.value < 1 or payload.value > 10000:
             raise HTTPException(status_code=422, detail="Window and count policies must be between 1 and 10000")
+    elif policy.rule_key in HOUR_POLICIES:
+        if payload.value < 0 or payload.value > 23 or not payload.value.is_integer():
+            raise HTTPException(status_code=422, detail="Working hours must be whole UTC hours between 0 and 23")
     elif payload.value < 0 or payload.value > 100:
         raise HTTPException(status_code=422, detail="Weights and thresholds must be between 0 and 100")
     policy.value = payload.value
@@ -285,6 +317,14 @@ def update_policy(
         policy.enabled = payload.enabled
     db.commit()
     db.refresh(policy)
+    actor, _ = context
+    security_logger.warning(
+        "Policy updated (policy_id=%s, actor_id=%s, value=%s, enabled=%s)",
+        policy.id,
+        actor.id,
+        policy.value,
+        policy.enabled,
+    )
     return {
         "id": policy.id,
         "name": policy.name,

@@ -48,6 +48,10 @@ Employee resource responses deliberately omit `is_decoy` and `decoy_type`.
 
 On `DENY`, resource access returns HTTP 403 with the decision body. `RESTRICT` returns HTTP 200 without resource content.
 
+Each detection `Finding` includes `rule_key`, `risk_points`, `reason`, and
+`mitre_attack_id`. Finding event details and incident evidence preserve the
+MITRE identifier for timeline and report use.
+
 ## Activity, alerts, incidents, and policies
 
 | Method | Path | Role | Request body / query | Sample response |
@@ -56,7 +60,7 @@ On `DENY`, resource access returns HTTP 403 with the decision body. `RESTRICT` r
 | GET | `/api/alerts` | Admin, analyst | Optional `severity`, `status`, `page`, `page_size` | `{"items":[{"id":2,"incident_id":1,"session_id":12,"severity":"critical","status":"open","title":"Monitored security indicator","message":"A monitored event is an indicator of compromise requiring investigation."}],"total":1,"page":1,"page_size":20}` |
 | PATCH | `/api/alerts/{alert_id}` | Admin, analyst | `{"status":"acknowledged","severity":"high"}` | `{"id":2,"incident_id":1,"session_id":12,"severity":"high","status":"acknowledged","title":"Monitored security indicator"}` |
 | GET | `/api/incidents` | Admin, analyst | Optional `severity`, `status`, `page`, `page_size` | `{"items":[{"id":1,"session_id":12,"user_id":7,"severity":"critical","status":"open","title":"Monitored security indicator","summary":"A monitored event is an indicator of compromise requiring investigation."}],"total":1,"page":1,"page_size":20}` |
-| GET | `/api/incidents/{incident_id}` | Admin, analyst | Path `incident_id` | `{"id":1,"severity":"critical","status":"open","evidence_snapshot":{"session_state":{},"trust_history":[],"triggering_event":{},"decision_explanations":[]},"timeline":[{"kind":"activity","event_type":"decoy_trigger"}]}` |
+| GET | `/api/incidents/{incident_id}` | Admin, analyst | Path `incident_id` | `{"id":1,"severity":"critical","status":"open","evidence_snapshot":{"sha256_digest":"<sha256>","findings":[]},"evidence_integrity":{"valid":true},"timeline":[{"kind":"activity","event_type":"decoy_trigger","details":{"mitre_attack_id":"T1552 Unsecured Credentials"}}]}` |
 | PATCH | `/api/incidents/{incident_id}` | Admin, analyst | `{"status":"investigating","analyst_notes":"Review synthetic evidence."}` | `{"id":1,"status":"investigating","analyst_notes":"Review synthetic evidence."}` |
 | POST | `/api/incidents/{incident_id}/respond` | Admin, analyst | `{"action":"restrict_session","notes":"Demo response"}`; actions are simulated | `{"id":1,"incident_id":1,"action":"restrict_session","performed_by":"analyst","session_status":"restricted","simulated":true}` |
 | GET | `/api/policies` | Admin, analyst | None | `[{"id":1,"name":"Unknown device","rule_key":"unknown_device","value":15.0,"enabled":true}]` |
@@ -68,8 +72,10 @@ Supported response actions: `restrict_session`, `terminate_session`, `block_sens
 
 | Method | Path | Role | Request body / query | Sample response |
 |---|---|---|---|---|
-| GET | `/api/reports/incident/{incident_id}` | Admin, analyst | Path `incident_id` | `{"report_type":"incident","incident":{"id":1,"severity":"critical","status":"open"},"evidence_snapshot":{},"timeline":[{"kind":"decision","decision":"DENY"}]}` |
+| GET | `/api/reports/incident/{incident_id}` | Admin, analyst | Path `incident_id` | `{"report_type":"incident","incident":{"id":1,"severity":"critical","status":"open"},"evidence_snapshot":{"sha256_digest":"<sha256>"},"evidence_integrity":{"valid":true},"audit_integrity":{"valid":true,"checked":44,"first_broken_event_id":null},"timeline":[{"kind":"decision","decision":"DENY","mitre_attack_ids":["T1552 Unsecured Credentials"]}]}` |
 | GET | `/api/reports/audit` | Admin, analyst | Optional ISO `from`, `to`; `format=json|csv`; optional `page`, `page_size` | JSON: `{"items":[{"id":44,"event_type":"decoy_trigger","severity":"critical"}],"total":1,"page":1,"page_size":100}`. CSV: `id,session_id,user_id,resource_id,event_type,severity,risk_points,details,timestamp` |
+| GET | `/api/reports/audit/integrity` | Admin, analyst | None | `{"valid":true,"checked":44,"first_broken_event_id":null}` |
+| GET | `/api/reports/detection-coverage` | Admin, analyst | None | `[{"rule_key":"decoy_interaction","description":"A request touches a monitored synthetic decoy.","mitre_attack_id":"T1552 Unsecured Credentials","technique_name":"Unsecured Credentials","current_weight":50.0,"enabled":true,"simulation_covered":true,"simulation_scenarios":["decoy_touch"]}]` |
 | GET | `/api/dashboard/summary` | Admin, analyst | None | `{"active_sessions":2,"monitored_devices":4,"decoy_count":5,"open_alerts":1,"incidents_by_severity":{"low":0,"medium":0,"high":0,"critical":1},"average_trust":82.5}` |
 | GET | `/api/dashboard/trust-trends` | Admin, analyst | None | `[{"time":"2026-11-25T10:00:00","value":90.0}]` |
 | GET | `/api/dashboard/events-over-time` | Admin, analyst | None | `[{"time":"2026-11-25T10:00:00","value":5}]` |
@@ -82,3 +88,7 @@ Supported response actions: `restrict_session`, `terminate_session`, `block_sens
 | POST | `/api/demo/reset` | Admin | None | `{"reset":true,"simulated":true,"detail":"HoneyGate seed data restored"}` |
 
 The demo scenario and reset operate only on synthetic records in the local database. No real credentials or external response actions are used.
+
+Activity events are chained in ID order using SHA-256 hashes stored in the
+existing event `details` JSON. Incident evidence snapshots include a separate
+SHA-256 digest; read endpoints report whether that digest still matches.

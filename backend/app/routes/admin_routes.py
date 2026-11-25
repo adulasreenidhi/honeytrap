@@ -1,5 +1,7 @@
 """Administrative CRUD routes."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,7 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/api", tags=["admin"], dependencies=[Depends(require_role("admin"))])
+security_logger = logging.getLogger("honeygate.security")
 
 
 @router.post("/users", response_model=UserRead, status_code=status.HTTP_201_CREATED, summary="Create a user")
@@ -57,26 +60,76 @@ def get_user(user_id: int, db: Session = Depends(get_db)) -> User:
 
 
 @router.patch("/users/{user_id}", response_model=UserRead, summary="Update a user")
-def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)) -> User:
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    context: tuple[User, SessionModel] = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> User:
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    actor, _ = context
     changes = payload.model_dump(exclude_unset=True)
+    for field in ("email", "password", "role", "department", "status"):
+        if changes.get(field) is None:
+            changes.pop(field, None)
     password = changes.pop("password", None)
+    if user.id == actor.id and changes.get("role") not in {None, user.role}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrators cannot change their own role")
+    if user.role == "admin" and user.status == "active" and changes.get("role") not in {None, "admin"}:
+        admin_count = db.query(User).filter(User.role == "admin", User.status == "active").count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The last active administrator cannot be demoted")
+    if (
+        user.role == "admin"
+        and user.status == "active"
+        and changes.get("status") == "suspended"
+        and db.query(User).filter(User.role == "admin", User.status == "active").count() <= 1
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The last active administrator cannot be suspended")
+    previous_role = user.role
     for key, value in changes.items():
         setattr(user, key, value)
     if password:
         user.hashed_password = hash_password(password)
+        db.query(SessionModel).filter(SessionModel.user_id == user_id).update(
+            {SessionModel.status: "ended"},
+            synchronize_session=False,
+        )
     db.commit()
     db.refresh(user)
+    if previous_role != user.role:
+        security_logger.warning(
+            "User role changed (actor_id=%s, target_id=%s, old_role=%s, new_role=%s)",
+            actor.id,
+            user.id,
+            previous_role,
+            user.role,
+        )
+    if password:
+        security_logger.warning("User password changed and sessions revoked (actor_id=%s, target_id=%s)", actor.id, user.id)
     return user
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a user")
-def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
+def delete_user(
+    user_id: int,
+    context: tuple[User, SessionModel] = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> None:
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    actor, _ = context
+    if actor.id == user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrators cannot delete themselves")
+    if (
+        user.role == "admin"
+        and user.status == "active"
+        and db.query(User).filter(User.role == "admin", User.status == "active").count() <= 1
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The last active administrator cannot be deleted")
     db.query(SessionModel).filter(SessionModel.user_id == user_id).delete()
     db.delete(user)
     db.commit()
@@ -112,7 +165,7 @@ def update_device(device_id: int, payload: DeviceUpdate, db: Session = Depends(g
     device = db.get(Device, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    for key, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
         setattr(device, key, value)
     db.commit()
     db.refresh(device)
@@ -160,7 +213,11 @@ def update_decoy(decoy_id: int, payload: ResourceUpdate, db: Session = Depends(g
     decoy = db.get(Resource, decoy_id)
     if decoy is None or not decoy.is_decoy:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decoy not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    for field in ("name", "type", "department", "sensitivity", "content", "is_decoy"):
+        if changes.get(field) is None:
+            changes.pop(field)
+    for key, value in changes.items():
         setattr(decoy, key, value)
     decoy.is_decoy = True
     db.commit()

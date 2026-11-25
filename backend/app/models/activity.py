@@ -13,8 +13,8 @@ class ActivityEvent(Base):
     __tablename__ = "activity_events"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    session_id: Mapped[int | None] = mapped_column(ForeignKey("sessions.id"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     resource_id: Mapped[int | None] = mapped_column(ForeignKey("resources.id"), nullable=True)
     event_type: Mapped[str] = mapped_column(String(32))
     severity: Mapped[str] = mapped_column(String(16), default="low")

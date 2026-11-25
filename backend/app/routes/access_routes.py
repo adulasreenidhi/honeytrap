@@ -1,10 +1,12 @@
 """Continuous access monitoring and session-management routes."""
 
+import re
 from datetime import datetime
+from unicodedata import category
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_role
@@ -23,17 +25,17 @@ router = APIRouter(prefix="/api", tags=["Access"])
 
 
 class VerifyRequest(BaseModel):
-    otp: str
+    otp: str = Field(pattern=r"^\d{6}$")
 
 
 class DeviceChangeRequest(BaseModel):
     session_id: int
-    device_id: str
+    device_id: str = Field(min_length=1, max_length=128)
 
 
 class LocationChangeRequest(BaseModel):
     session_id: int
-    location: str
+    location: str = Field(min_length=1, max_length=128)
 
 
 def _decision_body(decision, resource: Resource | None = None) -> dict:
@@ -51,6 +53,28 @@ def _decision_body(decision, resource: Resource | None = None) -> dict:
     return body
 
 
+def _employee_safe_decision(body: dict) -> dict:
+    """Remove policy weights and decoy metadata from employee-facing decisions."""
+
+    weight = re.compile(r"\s*\(\+\d+(?:\.\d+)?\)")
+    for key in ("reasons",):
+        body[key] = [
+            "decoy_interaction: access denied"
+            if "decoy_interaction" in reason
+            else weight.sub("", reason)
+            for reason in body.get(key, [])
+        ]
+    body["triggered_rules"] = [
+        rule for rule in body.get("triggered_rules", []) if rule != "decoy_interaction"
+    ]
+    assessment = body.get("trust_assessment")
+    if assessment is not None:
+        assessment["previous_score"] = assessment["score"]
+        assessment["delta"] = 0
+        assessment["contributing_factors"] = []
+    return body
+
+
 def _run_pipeline(
     db: Session,
     session: SessionModel,
@@ -63,6 +87,23 @@ def _run_pipeline(
     assessment = recalculate(db, session, findings)
     policies = policy_values(db)
     decision = evaluate(session, user, resource, findings, assessment.score, policies, db=db)
+    log_event(
+        db,
+        session,
+        user,
+        None,
+        "access_decision",
+        {
+            "decision": decision.decision,
+            "status_code": 403 if decision.decision == "DENY" else 200,
+            "triggered_rules": decision.triggered_rules,
+            "mitre_attack_ids": sorted({
+                finding.mitre_attack_id for finding in findings
+            }),
+        },
+        "high" if decision.decision == "DENY" else "low",
+        0,
+    )
     decoy_triggered = any(finding.rule_key == "decoy_interaction" for finding in findings)
     decoy_event = (
         db.query(ActivityEvent)
@@ -134,6 +175,7 @@ def _run_pipeline(
 @router.post("/access/resource/{resource_id}", summary="Monitored resource access", response_model=None)
 def access_resource(
     resource_id: int,
+    request: Request,
     context: tuple[User, SessionModel] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> JSONResponse | dict:
@@ -148,7 +190,12 @@ def access_resource(
         user,
         resource,
         "file_access",
-        {"operation": "resource_access", "resource_name": resource.name},
+        {
+            "operation": "resource_access",
+            "resource_name": resource.name,
+            "client_ip": request.client.host if request.client else "unknown",
+            "user_agent": request.headers.get("user-agent", ""),
+        },
         "medium" if resource.sensitivity in {"high", "critical"} else "low",
         0,
     )
@@ -166,6 +213,8 @@ def access_resource(
     db.commit()
 
     body = _run_pipeline(db, session, user, resource)
+    if user.role == "employee":
+        body = _employee_safe_decision(body)
     if body["decision"] == "DENY":
         return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content=body)
     return body
@@ -173,23 +222,30 @@ def access_resource(
 
 @router.post("/access/search", summary="Monitored search")
 def access_search(
-    q: str,
+    request: Request,
+    q: str = Query(default="", max_length=256),
     context: tuple[User, SessionModel] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     user, session = context
+    clean_query = "".join(character for character in q if category(character) != "Cc").strip()
     log_event(
         db,
         session,
         user,
         None,
         "search",
-        {"query": q},
+        {
+            "query": clean_query,
+            "client_ip": request.client.host if request.client else "unknown",
+            "user_agent": request.headers.get("user-agent", ""),
+        },
         "low",
         0,
     )
     db.commit()
-    return _run_pipeline(db, session, user, None)
+    body = _run_pipeline(db, session, user, None)
+    return _employee_safe_decision(body) if user.role == "employee" else body
 
 
 @router.post("/access/verify", summary="Mock step-up verification")
@@ -213,6 +269,15 @@ def verify_access(
         is not None
     )
     if session.status == "denied" or decoy_seen:
+        if user.role == "employee":
+            return {
+                "verified": False,
+                "decision": "DENY",
+                "trust_score": session.trust_score,
+                "reasons": ["Verification is unavailable for this session"],
+                "triggered_rules": [],
+                "recommended_action": "block_session",
+            }
         return {
             "verified": False,
             "decision": "DENY",
@@ -253,7 +318,7 @@ def verify_access(
     session.last_activity_at = datetime.utcnow()
     db.commit()
     db.refresh(session)
-    return {
+    result = {
         "verified": True,
         "decision": "ALLOW" if session.status == "active" else "RESTRICT",
         "trust_score": session.trust_score,
@@ -261,6 +326,9 @@ def verify_access(
         "triggered_rules": ["step_up_verification"],
         "recommended_action": "none" if session.status == "active" else "require_step_up_verification",
     }
+    if user.role == "employee":
+        result["reasons"] = ["Step-up verification completed"]
+    return result
 
 
 @router.get("/sessions/{session_id}/trust", summary="Get session trust and history")
@@ -289,8 +357,8 @@ def session_trust(
                 "id": row.id,
                 "session_id": row.session_id,
                 "score": row.score,
-                "delta": row.delta,
-                "reason": row.reason,
+                "delta": row.delta if user.role in {"admin", "analyst"} else 0,
+                "reason": row.reason if user.role in {"admin", "analyst"} else "trust assessment updated",
                 "timestamp": row.timestamp,
             }
             for row in history

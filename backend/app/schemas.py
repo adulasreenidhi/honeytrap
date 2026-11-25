@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ORMModel(BaseModel):
@@ -12,24 +12,52 @@ class ORMModel(BaseModel):
 
 # Users
 class UserCreate(ORMModel):
-    username: str = Field(min_length=3, max_length=64)
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     email: str = Field(max_length=255)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=12, max_length=72)
     role: Literal["admin", "analyst", "employee"] = "employee"
     department: str = Field(min_length=1, max_length=64)
     status: Literal["active", "suspended"] = "active"
-    registered_device_id: str | None = None
-    usual_location: str | None = None
+    registered_device_id: str | None = Field(default=None, max_length=128)
+    usual_location: str | None = Field(default=None, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def password_is_strong(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        if not (
+            any(char.islower() for char in value)
+            and any(char.isupper() for char in value)
+            and any(char.isdigit() for char in value)
+            and any(not char.isalnum() for char in value)
+        ):
+            raise ValueError("Password must contain lowercase, uppercase, numeric, and special characters")
+        return value
 
 
 class UserUpdate(ORMModel):
-    email: str | None = None
-    password: str | None = Field(default=None, min_length=8, max_length=128)
+    email: str | None = Field(default=None, max_length=255)
+    password: str | None = Field(default=None, min_length=12, max_length=72)
     role: Literal["admin", "analyst", "employee"] | None = None
-    department: str | None = None
+    department: str | None = Field(default=None, min_length=1, max_length=64)
     status: Literal["active", "suspended"] | None = None
-    registered_device_id: str | None = None
-    usual_location: str | None = None
+    registered_device_id: str | None = Field(default=None, max_length=128)
+    usual_location: str | None = Field(default=None, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def password_is_strong(cls, value: str | None) -> str | None:
+        if value is not None and len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        if value is not None and not (
+            any(char.islower() for char in value)
+            and any(char.isupper() for char in value)
+            and any(char.isdigit() for char in value)
+            and any(not char.isalnum() for char in value)
+        ):
+            raise ValueError("Password must contain lowercase, uppercase, numeric, and special characters")
+        return value
 
 
 class UserRead(ORMModel):
@@ -53,7 +81,7 @@ class DeviceCreate(ORMModel):
 
 
 class DeviceUpdate(ORMModel):
-    label: str | None = None
+    label: str | None = Field(default=None, min_length=1, max_length=128)
     status: Literal["registered", "unknown", "unverified", "revoked"] | None = None
 
 
@@ -69,14 +97,14 @@ class DeviceRead(ORMModel):
 # Sessions
 class SessionCreate(ORMModel):
     user_id: int
-    device_id: str
-    location: str
+    device_id: str = Field(min_length=1, max_length=128)
+    location: str = Field(min_length=1, max_length=128)
 
 
 class SessionUpdate(ORMModel):
-    trust_score: int | None = None
+    trust_score: int | None = Field(default=None, ge=0, le=100)
     status: Literal["active", "restricted", "denied", "ended"] | None = None
-    location: str | None = None
+    location: str | None = Field(default=None, max_length=128)
 
 
 class SessionRead(ORMModel):
@@ -93,15 +121,15 @@ class SessionRead(ORMModel):
 # Trust history
 class TrustHistoryCreate(ORMModel):
     session_id: int
-    score: float
-    delta: float
-    reason: str
+    score: float = Field(ge=0, le=100)
+    delta: float = Field(ge=-100, le=100)
+    reason: str = Field(min_length=1, max_length=255)
 
 
 class TrustHistoryUpdate(ORMModel):
-    score: float | None = None
-    delta: float | None = None
-    reason: str | None = None
+    score: float | None = Field(default=None, ge=0, le=100)
+    delta: float | None = Field(default=None, ge=-100, le=100)
+    reason: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class TrustHistoryRead(ORMModel):
@@ -119,19 +147,19 @@ class ResourceCreate(ORMModel):
     type: Literal["document", "finance", "project", "admin", "credential"]
     department: str = Field(min_length=1, max_length=64)
     sensitivity: Literal["low", "medium", "high", "critical"] = "low"
-    content: str = ""
+    content: str = Field(default="", max_length=100_000)
     is_decoy: bool = False
-    decoy_type: str | None = None
+    decoy_type: str | None = Field(default=None, max_length=64)
 
 
 class ResourceUpdate(ORMModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
     type: Literal["document", "finance", "project", "admin", "credential"] | None = None
-    department: str | None = None
+    department: str | None = Field(default=None, min_length=1, max_length=64)
     sensitivity: Literal["low", "medium", "high", "critical"] | None = None
-    content: str | None = None
+    content: str | None = Field(default=None, max_length=100_000)
     is_decoy: bool | None = None
-    decoy_type: str | None = None
+    decoy_type: str | None = Field(default=None, max_length=64)
 
 
 class ResourceRead(ORMModel):
@@ -154,25 +182,25 @@ class AdminResourceRead(ResourceRead):
 
 # Activity
 class ActivityEventCreate(ORMModel):
-    session_id: int
-    user_id: int
+    session_id: int | None
+    user_id: int | None
     resource_id: int | None = None
-    event_type: Literal["login", "file_access", "search", "sensitive_request", "decoy_trigger", "device_change", "location_change", "verification"]
-    severity: str = "low"
-    risk_points: int = 0
+    event_type: Literal["login", "login_failed", "file_access", "search", "sensitive_request", "decoy_trigger", "device_change", "location_change", "verification", "access_decision"]
+    severity: Literal["low", "medium", "high", "critical"] = "low"
+    risk_points: int = Field(default=0, ge=0, le=100)
     details: dict[str, Any] | None = None
 
 
 class ActivityEventUpdate(ORMModel):
-    severity: str | None = None
-    risk_points: int | None = None
+    severity: Literal["low", "medium", "high", "critical"] | None = None
+    risk_points: int | None = Field(default=None, ge=0, le=100)
     details: dict[str, Any] | None = None
 
 
 class ActivityEventRead(ORMModel):
     id: int
-    session_id: int
-    user_id: int
+    session_id: int | None
+    user_id: int | None
     resource_id: int | None
     event_type: str
     severity: str
@@ -187,19 +215,19 @@ class IncidentCreate(ORMModel):
     user_id: int
     severity: Literal["low", "medium", "high", "critical"] = "medium"
     status: Literal["open", "investigating", "resolved"] = "open"
-    title: str
-    summary: str = ""
+    title: str = Field(min_length=1, max_length=255)
+    summary: str = Field(default="", max_length=10_000)
     evidence_snapshot: dict[str, Any] | None = None
-    analyst_notes: str | None = None
+    analyst_notes: str | None = Field(default=None, max_length=10_000)
 
 
 class IncidentUpdate(ORMModel):
     severity: Literal["low", "medium", "high", "critical"] | None = None
     status: Literal["open", "investigating", "resolved"] | None = None
-    title: str | None = None
-    summary: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    summary: str | None = Field(default=None, max_length=10_000)
     evidence_snapshot: dict[str, Any] | None = None
-    analyst_notes: str | None = None
+    analyst_notes: str | None = Field(default=None, max_length=10_000)
 
 
 class IncidentRead(ORMModel):
@@ -219,17 +247,17 @@ class IncidentRead(ORMModel):
 class AlertCreate(ORMModel):
     incident_id: int
     session_id: int
-    severity: str = "medium"
-    status: str = "open"
-    title: str
-    message: str
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    status: Literal["open", "acknowledged", "resolved"] = "open"
+    title: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1, max_length=10_000)
 
 
 class AlertUpdate(ORMModel):
-    severity: str | None = None
-    status: str | None = None
-    title: str | None = None
-    message: str | None = None
+    severity: Literal["low", "medium", "high", "critical"] | None = None
+    status: Literal["open", "acknowledged", "resolved"] | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    message: str | None = Field(default=None, min_length=1, max_length=10_000)
 
 
 class AlertRead(ORMModel):
@@ -246,14 +274,20 @@ class AlertRead(ORMModel):
 # Response actions
 class ResponseActionCreate(ORMModel):
     incident_id: int
-    action: str
-    performed_by: str
-    notes: str | None = None
+    action: Literal[
+        "restrict_session", "terminate_session", "block_sensitive_resources",
+        "require_step_up_verification", "suspend_user", "mark_device_revoked",
+    ]
+    performed_by: str = Field(min_length=1, max_length=64)
+    notes: str | None = Field(default=None, max_length=10_000)
 
 
 class ResponseActionUpdate(ORMModel):
-    action: str | None = None
-    notes: str | None = None
+    action: Literal[
+        "restrict_session", "terminate_session", "block_sensitive_resources",
+        "require_step_up_verification", "suspend_user", "mark_device_revoked",
+    ] | None = None
+    notes: str | None = Field(default=None, max_length=10_000)
 
 
 class ResponseActionRead(ORMModel):
@@ -267,16 +301,16 @@ class ResponseActionRead(ORMModel):
 
 # Policies
 class PolicyCreate(ORMModel):
-    name: str
-    rule_key: str
-    value: float
+    name: str = Field(min_length=1, max_length=128)
+    rule_key: str = Field(min_length=1, max_length=128)
+    value: float = Field(ge=0, le=10000)
     enabled: bool = True
 
 
 class PolicyUpdate(ORMModel):
-    name: str | None = None
-    rule_key: str | None = None
-    value: float | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    rule_key: str | None = Field(default=None, min_length=1, max_length=128)
+    value: float | None = Field(default=None, ge=0, le=10000)
     enabled: bool | None = None
 
 
@@ -289,10 +323,10 @@ class PolicyRead(ORMModel):
 
 
 class LoginRequest(ORMModel):
-    username: str
-    password: str
-    device_id: str
-    location: str
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+    password: str = Field(min_length=1, max_length=72)
+    device_id: str = Field(min_length=1, max_length=128)
+    location: str = Field(min_length=1, max_length=128)
 
 
 class LoginSessionInfo(ORMModel):

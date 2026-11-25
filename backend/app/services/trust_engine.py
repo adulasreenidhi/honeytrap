@@ -1,11 +1,12 @@
 """Pure, bounded trust scoring with persisted history."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import timedelta
 from typing import Iterable
 
 from sqlalchemy.orm import Session
 
+from app.services import detection_engine
 from app.models.activity import ActivityEvent
 from app.models.session import Session as SessionModel
 from app.models.session import TrustHistory
@@ -55,7 +56,7 @@ def _finding_key(finding: Finding) -> str:
 
 
 def recalculate(db: Session, session: SessionModel, findings: list[Finding]) -> TrustAssessment:
-    """Apply only unseen finding keys and write history on a score change."""
+    """Apply unseen findings and cautiously restore trust after sustained normal activity."""
 
     previous = bounded_score(session.trust_score)
     seen = _existing_dedup_keys(db, session.id)
@@ -70,10 +71,43 @@ def recalculate(db: Session, session: SessionModel, findings: list[Finding]) -> 
             event_type="verification" if finding.rule_key.endswith("_device") else "sensitive_request",
             severity="critical" if finding.rule_key == "decoy_interaction" else "medium",
             risk_points=int(finding.risk_points),
-            details={"_dedup_key": _finding_key(finding), "rule_key": finding.rule_key, "reason": finding.reason},
-            timestamp=datetime.utcnow(),
+            details={
+                "_dedup_key": _finding_key(finding),
+                "rule_key": finding.rule_key,
+                "reason": finding.reason,
+                "mitre_attack_id": finding.mitre_attack_id,
+            },
+            timestamp=detection_engine.utcnow(),
         )
         db.add(event)
+
+    now = detection_engine.utcnow()
+    decoy_seen = (
+        db.query(ActivityEvent)
+        .filter(
+            ActivityEvent.session_id == session.id,
+            ActivityEvent.event_type == "decoy_trigger",
+        )
+        .first()
+        is not None
+    )
+    if not findings and not unseen and new_score < 100 and not decoy_seen and session.status not in {"denied", "ended"}:
+        policies = detection_engine.policy_values(db)
+        interval = int(policies.get("risk_decay_interval_minutes", 15))
+        latest_history = (
+            db.query(TrustHistory)
+            .filter(TrustHistory.session_id == session.id)
+            .order_by(TrustHistory.timestamp.desc(), TrustHistory.id.desc())
+            .first()
+        )
+        if (
+            latest_history is not None
+            and latest_history.timestamp <= now - timedelta(minutes=interval)
+        ):
+            points = float(policies.get("risk_decay_points", 2))
+            new_score = bounded_score(new_score + points)
+            if new_score > previous:
+                factors.append(f"risk_decay (+{new_score - previous}): sustained normal activity")
 
     delta = float(new_score - previous)
     if delta:
@@ -82,8 +116,8 @@ def recalculate(db: Session, session: SessionModel, findings: list[Finding]) -> 
             session_id=session.id,
             score=float(new_score),
             delta=delta,
-            reason="continuous_monitoring",
-            timestamp=datetime.utcnow(),
+            reason="risk_decay" if delta > 0 else "continuous_monitoring",
+            timestamp=now,
         ))
     db.flush()
     return TrustAssessment(

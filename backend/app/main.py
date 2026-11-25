@@ -21,15 +21,21 @@ from app.routes.access_routes import router as access_router
 from app.routes.report_routes import router as report_router
 from app.routes.demo_routes import router as demo_router
 from app.seed import seed
+from app.security import SecurityMiddleware
+from app.services.audit_integrity import initialize_chain
 
 logger = logging.getLogger("honeygate.request")
-app = FastAPI(title="HoneyGate")
+app = FastAPI(title="HoneyGate", debug=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+app.add_middleware(
+    SecurityMiddleware,
+    max_body_size=settings.MAX_REQUEST_BODY_SIZE_BYTES,
 )
 
 
@@ -62,7 +68,13 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(
         status_code=422,
-        content={"error": "RequestValidationError", "detail": exc.errors()},
+        content={
+            "error": "RequestValidationError",
+            "detail": [
+                {"loc": error.get("loc"), "msg": error.get("msg"), "type": error.get("type")}
+                for error in exc.errors()
+            ],
+        },
     )
 
 
@@ -78,7 +90,7 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError) -> 
 async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=500,
-        content={"error": exc.__class__.__name__, "detail": "Internal server error"},
+        content={"error": "InternalServerError", "detail": "Internal server error"},
     )
 
 
@@ -88,6 +100,7 @@ def startup() -> None:
     db = SessionLocal()
     try:
         seed(db)
+        initialize_chain(db)
     finally:
         db.close()
 

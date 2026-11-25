@@ -1,5 +1,6 @@
 """Deterministic adaptive policy decisions and simulated responses."""
 
+import logging
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -10,6 +11,8 @@ from app.models.resource import Resource
 from app.models.session import Session
 from app.models.user import Device, User
 from app.services.detection_engine import Finding
+
+security_logger = logging.getLogger("honeygate.security")
 
 
 @dataclass(frozen=True)
@@ -173,4 +176,10 @@ def apply_response_action(
     )
     db.add(action_log)
     db.flush()
+    security_logger.warning(
+        "Simulated response action recorded (actor=%s, session_id=%s, action=%s)",
+        performed_by,
+        session.id,
+        action,
+    )
     return action_log

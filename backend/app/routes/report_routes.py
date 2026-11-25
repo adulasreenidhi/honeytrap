@@ -3,9 +3,9 @@
 import csv
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,16 +13,52 @@ from sqlalchemy.orm import Session
 from app.auth import require_role
 from app.database import get_db
 from app.models.activity import ActivityEvent
-from app.models.incident import Alert, Incident, ResponseAction
+from app.models.incident import Alert, Incident, Policy, ResponseAction
 from app.models.resource import Resource
 from app.models.session import Session as SessionModel
 from app.models.session import TrustHistory
 from app.models.user import Device
 from app.routes import paginate
+from app.services.audit_integrity import verify_chain, verify_snapshot
+from app.services.detection_engine import DETECTION_RULE_DESCRIPTIONS, MITRE_BY_RULE
 from app.services.incident_service import incident_timeline
 
 router = APIRouter(prefix="/api", tags=["Reports and dashboards"])
 ADMIN_ANALYST = Depends(require_role("admin", "analyst"))
+SIMULATION_RULE_COVERAGE = {
+    "unknown_device": ["stolen_credentials_unknown_device"],
+    "unverified_device": ["test_unverified_device_rule_is_covered"],
+    "revoked_device": ["test_revoked_device_rule_is_covered"],
+    "unusual_location": ["stolen_credentials_unknown_device"],
+    "abnormal_file_access": ["insider_data_hoarding"],
+    "suspicious_behaviour": ["test_search_volume_rule_is_covered"],
+    "unauthorized_resource": ["privilege_escalation_probe"],
+    "sensitive_resource_access": ["insider_data_hoarding", "slow_and_low"],
+    "decoy_interaction": ["decoy_touch", "enumeration_scan"],
+    "velocity_burst": ["insider_data_hoarding"],
+    "resource_enumeration": ["insider_data_hoarding", "enumeration_scan"],
+    "credential_hunting": ["test_credential_hunting_decoy_bonus_is_deduplicated"],
+    "privilege_probing": ["privilege_escalation_probe"],
+    "impossible_travel": ["test_impossible_travel_uses_demo_location_lookup"],
+    "off_hours_access": ["test_off_hours_access_is_policy_configurable"],
+    "token_context_change": ["token_replay"],
+    "login_attack_pattern": ["credential_stuffing"],
+    "slow_and_low_exfiltration": ["slow_and_low"],
+}
+POLICY_KEY_BY_RULE = {
+    "unverified_device": "unknown_device",
+    "revoked_device": "unknown_device",
+    "unauthorized_resource": "suspicious_behaviour",
+    "sensitive_resource_access": "suspicious_behaviour",
+}
+
+
+def _safe_csv_cell(value: Any) -> Any:
+    """Neutralize spreadsheet formula prefixes in every exported string cell."""
+
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
 
 
 @router.get(
@@ -31,7 +67,7 @@ ADMIN_ANALYST = Depends(require_role("admin", "analyst"))
     description="Admin and analyst access. Returns structured incident evidence and its ordered timeline.",
     dependencies=[ADMIN_ANALYST],
 )
-def incident_report(incident_id: int, db: Session = Depends(get_db)) -> dict:
+def incident_report(incident_id: int = Path(ge=1), db: Session = Depends(get_db)) -> dict:
     incident = db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
@@ -50,8 +86,51 @@ def incident_report(incident_id: int, db: Session = Depends(get_db)) -> dict:
             "created_at": incident.created_at.isoformat(),
         },
         "evidence_snapshot": incident.evidence_snapshot or {},
+        "evidence_integrity": verify_snapshot(incident.evidence_snapshot),
+        "audit_integrity": verify_chain(db),
         "timeline": incident_timeline(db, incident),
     }
+
+
+@router.get(
+    "/reports/audit/integrity",
+    summary="Verify the activity-event hash chain",
+    description="Admin and analyst access. Reports the first broken event or missing link.",
+    dependencies=[ADMIN_ANALYST],
+)
+def audit_integrity_report(db: Session = Depends(get_db)) -> dict[str, Any]:
+    return verify_chain(db)
+
+
+@router.get(
+    "/reports/detection-coverage",
+    summary="List detection rules and simulation coverage",
+    description="Admin and analyst access. Reports each rule's mapping, policy, and test coverage.",
+    dependencies=[ADMIN_ANALYST],
+)
+def detection_coverage_report(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    policy_rows = {
+        row.rule_key: row
+        for row in db.query(Policy).all()
+    }
+    results = []
+    for rule_key in sorted(MITRE_BY_RULE):
+        policy_key = POLICY_KEY_BY_RULE.get(rule_key, rule_key)
+        policy = policy_rows.get(policy_key)
+        mitre_attack_id = MITRE_BY_RULE[rule_key]
+        _, _, technique_name = mitre_attack_id.partition(" ")
+        scenarios = SIMULATION_RULE_COVERAGE.get(rule_key, [])
+        results.append({
+            "rule_key": rule_key,
+            "description": DETECTION_RULE_DESCRIPTIONS[rule_key],
+            "mitre_attack_id": mitre_attack_id,
+            "technique_name": technique_name,
+            "current_weight": float(policy.value) if policy is not None else None,
+            "enabled": bool(policy.enabled) if policy is not None else False,
+            "simulation_covered": bool(scenarios),
+            "simulation_scenarios": scenarios,
+        })
+    return results
 
 
 @router.get(
@@ -64,10 +143,15 @@ def audit_report(
     from_: datetime | None = Query(default=None, alias="from", description="Inclusive ISO timestamp"),
     to_: datetime | None = Query(default=None, alias="to", description="Inclusive ISO timestamp"),
     export_format: Literal["json", "csv"] = Query(default="json", alias="format"),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
+    if from_ is not None and to_ is not None:
+        if (from_.tzinfo is None) != (to_.tzinfo is None):
+            raise HTTPException(status_code=422, detail="'from' and 'to' must use compatible timezone formats")
+        if from_ > to_:
+            raise HTTPException(status_code=422, detail="'from' must be earlier than or equal to 'to'")
     query = db.query(ActivityEvent)
     if from_ is not None:
         query = query.filter(ActivityEvent.timestamp >= from_)
@@ -98,7 +182,8 @@ def audit_report(
     )
     writer.writeheader()
     for row in rows:
-        writer.writerow({**row, "details": str(row["details"])})
+        csv_row = {**row, "details": str(row["details"])}
+        writer.writerow({key: _safe_csv_cell(value) for key, value in csv_row.items()})
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),

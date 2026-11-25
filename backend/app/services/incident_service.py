@@ -9,6 +9,7 @@ from app.models.activity import ActivityEvent
 from app.models.incident import Alert, Incident, ResponseAction
 from app.models.session import Session, TrustHistory
 from app.models.user import User
+from app.services.audit_integrity import seal_snapshot
 from app.services.detection_engine import Finding
 from app.services.policy_engine import Decision
 
@@ -22,7 +23,16 @@ def _severity_for_findings(findings: Iterable[Finding]) -> str:
     for finding in findings:
         if finding.rule_key == "decoy_interaction":
             severities.append("critical")
-        elif finding.rule_key in {"revoked_device", "unauthorized_resource", "sensitive_resource_access", "abnormal_file_access"}:
+        elif finding.rule_key in {
+            "revoked_device",
+            "unauthorized_resource",
+            "sensitive_resource_access",
+            "abnormal_file_access",
+            "credential_hunting",
+            "privilege_probing",
+            "login_attack_pattern",
+            "slow_and_low_exfiltration",
+        }:
             severities.append("high")
         elif finding.rule_key in {"unknown_device", "unverified_device", "unusual_location", "suspicious_behaviour"}:
             severities.append("medium")
@@ -102,6 +112,7 @@ def create_or_attach_incident(
                 ],
                 "triggering_event": _event_snapshot(triggering_event),
                 "decision_explanations": [],
+                "mitre_attack_ids": [],
             },
         )
         db.add(incident)
@@ -121,16 +132,38 @@ def create_or_attach_incident(
     }
     if triggering_event is not None:
         evidence["triggering_event"] = _event_snapshot(triggering_event)
+    evidence_findings = list(evidence.get("findings", []))
+    finding_keys = {
+        (item.get("rule_key"), item.get("dedup_key"))
+        for item in evidence_findings
+    }
+    for finding in findings:
+        dedup_key = finding.dedup_key or finding.reason
+        key = (finding.rule_key, dedup_key)
+        if key not in finding_keys:
+            evidence_findings.append({
+                "rule_key": finding.rule_key,
+                "risk_points": finding.risk_points,
+                "reason": finding.reason,
+                "dedup_key": dedup_key,
+                "mitre_attack_id": finding.mitre_attack_id,
+            })
+            finding_keys.add(key)
+    evidence["findings"] = evidence_findings
+    mitre_ids = set(evidence.get("mitre_attack_ids", []))
+    mitre_ids.update(finding.mitre_attack_id for finding in findings)
+    evidence["mitre_attack_ids"] = sorted(mitre_ids)
     explanations = list(evidence.get("decision_explanations", []))
     explanations.append({
         "decision": decision.decision,
         "trust_score": decision.trust_score,
         "reasons": decision.reasons,
         "triggered_rules": decision.triggered_rules,
+        "mitre_attack_ids": sorted({finding.mitre_attack_id for finding in findings}),
         "timestamp": now.isoformat(),
     })
     evidence["decision_explanations"] = explanations
-    incident.evidence_snapshot = evidence
+    incident.evidence_snapshot = seal_snapshot(evidence)
 
     alert = Alert(
         incident_id=incident.id,
@@ -190,6 +223,7 @@ def incident_timeline(db: DBSession, incident: Incident) -> list[dict[str, Any]]
             "trust_score": item["trust_score"],
             "reasons": item["reasons"],
             "triggered_rules": item["triggered_rules"],
+            "mitre_attack_ids": item.get("mitre_attack_ids", []),
         })
 
     session = db.get(Session, incident.session_id)
