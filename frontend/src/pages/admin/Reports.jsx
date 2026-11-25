@@ -1,0 +1,210 @@
+import { useEffect, useState } from 'react'
+import { Download, Printer } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import { auditReport, downloadAuditCsv, incidentReport, listIncidents } from '../../api/client.js'
+import DataTable from '../../components/DataTable.jsx'
+import FilterBar from '../../components/FilterBar.jsx'
+import JsonViewer from '../../components/JsonViewer.jsx'
+import Layout from '../../components/Layout.jsx'
+import Pagination from '../../components/Pagination.jsx'
+import SeverityBadge from '../../components/SeverityBadge.jsx'
+import Spinner from '../../components/Spinner.jsx'
+import Timeline from '../../components/Timeline.jsx'
+import { formatTime } from '../../utils/format.js'
+import { notify } from '../../utils/notify.js'
+
+function toApiDate(value, isEnd = false) {
+  if (!value) return ''
+  return `${value}T${isEnd ? '23:59:59' : '00:00:00'}`
+}
+
+function IncidentReport({ reportId }) {
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    incidentReport(reportId)
+      .then((data) => { if (active) setReport(data) })
+      .catch((error) => notify(error.detail || error.error || 'Unable to load incident report.', 'error'))
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [reportId])
+
+  if (loading) return <div className="surface"><Spinner label="Loading incident report" /></div>
+  if (!report) return <div className="surface p-5 text-sm text-slate-400">This incident report is unavailable.</div>
+  const incident = report.incident
+
+  return (
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow">SIMULATED INCIDENT REPORT · #{incident.id}</p>
+          <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">{incident.title}</h1>
+          <p className="mt-2 text-sm text-slate-400">An indicator of compromise requiring investigation.</p>
+        </div>
+        <button className="button-primary no-print" onClick={() => window.print()} type="button"><Printer size={15} />Print / Save as PDF</button>
+      </header>
+
+      <article className="print-report space-y-5 rounded-xl">
+        <section className="print-light surface p-5 sm:p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <SeverityBadge value={incident.severity} />
+            <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold uppercase text-slate-400">{incident.status}</span>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-300">{incident.summary || 'An indicator of compromise requiring investigation.'}</p>
+          <div className="mt-5 grid gap-3 text-xs text-slate-400 sm:grid-cols-3">
+            <p>Incident ID <strong className="text-slate-200">#{incident.id}</strong></p>
+            <p>Session ID <strong className="text-slate-200">#{incident.session_id}</strong></p>
+            <p>Generated <strong className="text-slate-200">{formatTime(report.generated_at, true)}</strong></p>
+          </div>
+          {incident.analyst_notes && <div className="mt-5 border-t border-white/[0.06] pt-4"><h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Analyst notes</h2><p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{incident.analyst_notes}</p></div>}
+        </section>
+
+        <section className="print-light surface p-5 sm:p-6">
+          <h2 className="mb-6 text-sm font-semibold text-white">Timeline</h2>
+          <Timeline items={report.timeline || []} />
+        </section>
+        <section className="print-light surface p-5 sm:p-6">
+          <JsonViewer title="Evidence snapshot" value={report.evidence_snapshot} />
+        </section>
+      </article>
+    </div>
+  )
+}
+
+function AuditReports() {
+  const [dateRange, setDateRange] = useState({ from: '', to: '' })
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [items, setItems] = useState([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    async function load() {
+      try {
+        const data = await auditReport({
+          from: toApiDate(dateRange.from),
+          to: toApiDate(dateRange.to, true),
+          page,
+          page_size: pageSize,
+        })
+        if (!active) return
+        setItems(data.items)
+        setTotal(data.total)
+      } catch (error) {
+        if (active) notify(error.detail || error.error || 'Unable to load audit report.', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    load()
+    return () => { active = false }
+  }, [dateRange, page, pageSize])
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      await downloadAuditCsv({ from: toApiDate(dateRange.from), to: toApiDate(dateRange.to, true) })
+      notify('Audit CSV downloaded.', 'success')
+    } catch (error) {
+      notify(error.detail || error.error || 'Unable to export audit CSV.', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const columns = [
+    { key: 'timestamp', header: 'Timestamp', render: (item) => formatTime(item.timestamp, true) },
+    { key: 'event_type', header: 'Event', render: (item) => <span className="capitalize">{item.event_type.replaceAll('_', ' ')}</span> },
+    { key: 'severity', header: 'Severity', render: (item) => <SeverityBadge value={item.severity} /> },
+    { key: 'user_id', header: 'User', render: (item) => `#${item.user_id}` },
+    { key: 'session_id', header: 'Session', render: (item) => `#${item.session_id}` },
+    { key: 'risk_points', header: 'Risk' },
+  ]
+
+  const dateFilters = [
+    { name: 'from', label: 'From', type: 'date' },
+    { name: 'to', label: 'To', type: 'date' },
+  ]
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow">AUDIT EXPORT</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">Activity audit</h2>
+        </div>
+        <button className="button-secondary" disabled={exporting} onClick={exportCsv} type="button"><Download size={15} />{exporting ? 'Exporting…' : 'Export CSV'}</button>
+      </div>
+      <section className="surface p-4 sm:p-5">
+        <FilterBar filters={dateFilters} onChange={(name, value) => { setLoading(true); setPage(1); setDateRange((current) => ({ ...current, [name]: value })) }} onReset={() => { setLoading(true); setPage(1); setDateRange({ from: '', to: '' }) }} values={dateRange} />
+      </section>
+      <section className="surface overflow-hidden">
+        <div className="border-b border-white/[0.06] px-5 py-4"><h3 className="text-sm font-semibold text-white">JSON preview</h3></div>
+        <DataTable columns={columns} emptyTitle="No audit events found" loading={loading} rows={items} />
+        {!loading && items.length > 0 && (
+          <details className="border-t border-white/[0.06] px-5 py-4">
+            <summary className="cursor-pointer text-xs font-medium text-blue-300">View current page JSON</summary>
+            <div className="mt-4"><JsonViewer title="Audit page data" value={items} /></div>
+          </details>
+        )}
+        <Pagination disabled={loading} onChange={(nextPage, nextPageSize) => { setLoading(true); setPage(nextPage); setPageSize(nextPageSize) }} page={page} pageSize={pageSize} total={total} />
+      </section>
+    </section>
+  )
+}
+
+export default function Reports() {
+  const { id } = useParams()
+  const [incidents, setIncidents] = useState([])
+  const [incidentLoading, setIncidentLoading] = useState(true)
+
+  useEffect(() => {
+    if (id) return undefined
+    let active = true
+    listIncidents({ page: 1, page_size: 100 })
+      .then((data) => { if (active) setIncidents(data.items) })
+      .catch((error) => notify(error.detail || error.error || 'Unable to load incidents for reports.', 'error'))
+      .finally(() => { if (active) setIncidentLoading(false) })
+    return () => { active = false }
+  }, [id])
+
+  return (
+    <Layout>
+      {id ? (
+        <IncidentReport reportId={id} />
+      ) : (
+        <div className="space-y-8">
+          <section>
+            <p className="eyebrow">REPORTING</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Reports</h1>
+            <p className="mt-2 text-sm text-slate-400">Incident evidence and paginated activity audit exports.</p>
+          </section>
+          <section className="space-y-4">
+            <div>
+              <p className="eyebrow">INCIDENT REPORTS</p>
+              <h2 className="mt-1 text-lg font-semibold text-white">Select an incident</h2>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {incidentLoading ? <div className="surface md:col-span-2"><Spinner label="Loading incident reports" /></div> : incidents.length ? incidents.map((incident) => (
+                <Link className="surface flex items-start justify-between gap-3 p-4 transition-colors hover:border-accent/30" key={incident.id} to={`/admin/reports/${incident.id}`}>
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">{incident.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">Indicator of compromise requiring investigation · #{incident.id}</p>
+                    <p className="mt-2 text-[10px] text-slate-600">{formatTime(incident.created_at, true)}</p>
+                  </div>
+                  <SeverityBadge value={incident.severity} />
+                </Link>
+              )) : <div className="surface p-6 text-sm text-slate-500 md:col-span-2">No incident reports are available.</div>}
+            </div>
+          </section>
+          <AuditReports />
+        </div>
+      )}
+    </Layout>
+  )
+}
