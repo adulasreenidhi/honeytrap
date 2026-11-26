@@ -59,31 +59,5 @@ python -m pytest -q
 python -m tests.simulations.validate_detection
 ```
 
-## Roles
-
-| Role | Access |
-|---|---|
-| Employee | `/portal`: browse company resources, step-up verification |
-| Analyst | `/admin`: dashboard, trust monitoring, alerts, incidents, reports |
-| Admin | Everything above, plus users, devices, decoys, policies and demo mode |
-
-Seeded demo users and the DEMO-ONLY password are listed in `backend/README.md`.
-
-## Demo flow
-
-1. Log in as an employee and open a few files (trust stays high).
-2. Open many files quickly, then sensitive ones (trust drops, RESTRICT).
-3. Open a decoy file (DENY, session contained).
-4. As admin, review the alert, incident timeline, evidence and report.
-5. Or run the scripted version at `/admin/demo`.
-
-## Limitations
-
-- Synthetic data and simulated responses only
-- Rule-based detection, not machine learning
-- SQLite and an in-memory rate limiter, so not production-grade
-- No guarantee of detecting all attackers
-
-## References
 
 OpenCanary, Cowrie, T-Pot, NIST SP 800-207 (Zero Trust Architecture), MITRE ATT&CK
