@@ -53,16 +53,16 @@ export default function ActivityLog() {
   }
 
   const columns = [
-    { key: 'timestamp', header: 'Time', render: (item) => formatTime(item.timestamp, true) },
-    { key: 'user_id', header: 'User', render: (item) => <span className="font-mono">#{item.user_id}</span> },
-    { key: 'session_id', header: 'Session', render: (item) => <span className="font-mono">#{item.session_id}</span> },
+    { key: 'timestamp', header: 'Time', render: (item) => <span className="tabular-nums">{formatTime(item.timestamp, true)}</span> },
+    { key: 'user_id', header: 'User', render: (item) => <span className="font-mono text-muted">#{item.user_id}</span> },
+    { key: 'session_id', header: 'Session', render: (item) => <span className="font-mono text-muted">#{item.session_id}</span> },
     {
       key: 'event_type',
       header: 'Event',
-      render: (item) => <span className="font-medium capitalize text-slate-200">{item.event_type.replaceAll('_', ' ')}</span>,
+      render: (item) => <span className="font-medium capitalize text-text">{item.event_type.replaceAll('_', ' ')}</span>,
     },
     { key: 'severity', header: 'Severity', render: (item) => <SeverityBadge value={item.severity} /> },
-    { key: 'risk_points', header: 'Risk', render: (item) => <span className={item.risk_points > 0 ? 'font-mono text-warning' : 'font-mono text-slate-500'}>{item.risk_points}</span> },
+    { key: 'risk_points', header: 'Risk', render: (item) => <span className={item.risk_points > 0 ? 'font-mono font-semibold text-warning tabular-nums' : 'font-mono text-faint tabular-nums'}>{item.risk_points}</span> },
     {
       key: 'details',
       header: 'Details',
@@ -70,7 +70,7 @@ export default function ActivityLog() {
         <button
           aria-expanded={expandedId === item.id}
           aria-label={`${expandedId === item.id ? 'Hide' : 'Show'} details for event ${item.id}`}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-blue-300 hover:bg-white/[0.05]"
+          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium text-brand hover:bg-surface-2 hover:text-brand-light transition-colors"
           onClick={() => setExpandedId((current) => current === item.id ? null : item.id)}
           type="button"
         >
@@ -86,10 +86,11 @@ export default function ActivityLog() {
       <div className="space-y-6">
         <section>
           <p className="eyebrow">MONITORING</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Activity log</h1>
-          <p className="mt-2 text-sm text-slate-400">Search and inspect recorded synthetic session activity.</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-text sm:text-3xl">Activity log</h1>
+          <p className="mt-2 text-sm text-muted">Search and inspect recorded synthetic session activity.</p>
         </section>
-        <section className="surface p-4 sm:p-5">
+
+        <section className="card p-4 sm:p-5">
           <FilterBar
             filters={[
               { name: 'user_id', label: 'User ID', placeholder: 'e.g. 3', type: 'number' },
@@ -101,10 +102,11 @@ export default function ActivityLog() {
             values={filters}
           />
         </section>
-        <section className="surface overflow-hidden">
-          <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
-            <h2 className="text-sm font-semibold text-white">Event stream</h2>
-            <span className="text-xs text-slate-500">{total} events</span>
+
+        <section className="card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border bg-surface-2/40 px-5 py-4">
+            <h2 className="text-sm font-bold text-text">Event stream</h2>
+            <span className="text-xs text-muted tabular-nums">{total} events</span>
           </div>
           <DataTable
             columns={columns}
@@ -112,13 +114,13 @@ export default function ActivityLog() {
             emptyTitle="No activity found"
             expandedContent={(item) => expandedId === item.id ? (
               <div className="max-w-4xl">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">Event details</p>
-                <pre className="max-h-72 overflow-auto rounded-lg bg-black/20 p-3 font-mono text-[11px] leading-5 text-slate-300">{JSON.stringify(item.details || {}, null, 2)}</pre>
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">Event details</p>
+                <pre className="max-h-72 overflow-auto rounded-xl border border-border bg-surface-2/90 p-3.5 font-mono text-[11px] leading-5 text-text">{JSON.stringify(item.details || {}, null, 2)}</pre>
               </div>
             ) : null}
             loading={loading}
             rows={items}
-            rowClassName={(item) => item.event_type === 'decoy_trigger' ? 'bg-critical/[0.07] shadow-[inset_3px_0_16px_rgba(239,68,68,0.14)]' : ''}
+            rowClassName={(item) => item.event_type === 'decoy_trigger' ? 'bg-danger/[0.1] border-l-4 border-l-danger shadow-[inset_4px_0_16px_rgba(239,68,68,0.18)] font-semibold' : ''}
           />
           <Pagination
             disabled={loading}

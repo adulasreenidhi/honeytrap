@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { File, FileText, FolderKanban, Search, Sheet, ShieldAlert } from 'lucide-react'
+import { File, FileText, FolderKanban, Search, Sheet, ShieldAlert, ShieldCheck, Lock, Unlock, ArrowRight } from 'lucide-react'
 import { accessResource, accessSearch, listResources } from '../api/client.js'
 import EmptyState from '../components/EmptyState.jsx'
 import Layout from '../components/Layout.jsx'
@@ -33,7 +33,18 @@ export default function Portal() {
   const [searching, setSearching] = useState(false)
   const [openingResource, setOpeningResource] = useState(false)
   const latestAccess = useRef(0)
-  const denied = String(session?.status || '').toLowerCase() === 'denied'
+
+  const sessionStatus = String(session?.status || 'active').toLowerCase()
+  const denied = sessionStatus === 'denied'
+  const restricted = sessionStatus === 'restricted'
+  const trustScore = session?.trust_score ?? 100
+
+  const trustLevel = trustScore >= 80
+    ? { label: 'High Trust', color: 'text-success', bg: 'bg-success/10 border-success/30' }
+    : trustScore >= 50
+      ? { label: 'Moderate Trust', color: 'text-warning', bg: 'bg-warning/10 border-warning/30' }
+      : { label: 'Low Trust', color: 'text-danger', bg: 'bg-danger/10 border-danger/30' }
+
   const groups = useMemo(() => groupResources(resources), [resources])
 
   useEffect(() => {
@@ -96,32 +107,34 @@ export default function Portal() {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Session Contained Warning Banner */}
         {denied && (
-          <section className="flex items-start gap-3 rounded-xl border border-critical/30 bg-critical/[0.08] px-4 py-4 sm:px-5" role="alert">
-            <ShieldAlert className="mt-0.5 shrink-0 text-critical" size={20} aria-hidden="true" />
+          <section className="flex items-start gap-3 rounded-2xl border border-danger/40 bg-danger/[0.08] px-4 py-4 sm:px-5 shadow-[0_0_25px_rgba(239,68,68,0.2)] ring-1 ring-danger/30 backdrop-blur-sm" role="alert">
+            <ShieldAlert className="mt-0.5 shrink-0 text-danger animate-pulse" size={22} aria-hidden="true" />
             <div>
-              <h2 className="font-semibold text-red-200">Session contained</h2>
-              <p className="mt-1 text-sm leading-6 text-red-200/75">
+              <h2 className="font-bold text-danger">Session contained</h2>
+              <p className="mt-1 text-sm leading-6 text-danger/80">
                 Indicator of compromise requiring investigation. Further access actions are disabled.
               </p>
             </div>
           </section>
         )}
 
+        {/* Header with Title and Search */}
         <section className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
             <p className="eyebrow">COMPANY ENVIRONMENT</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Your workspace</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
-              Access approved resources and view the policy decision for each request.
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-text sm:text-3xl">Employee Dashboard</h1>
+            <p className="mt-1 text-sm text-muted">
+              Access approved company resources and monitor live session trust status.
             </p>
           </div>
           <form className="flex w-full max-w-md gap-2" onSubmit={submitSearch} role="search">
             <label className="sr-only" htmlFor="resource-search">Search company resources</label>
             <div className="relative min-w-0 flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true" />
               <input
-                className="text-field pl-9"
+                className="input text-field pl-9"
                 disabled={denied || searching}
                 id="resource-search"
                 onChange={(event) => setSearch(event.target.value)}
@@ -129,12 +142,70 @@ export default function Portal() {
                 value={search}
               />
             </div>
-            <button className="button-secondary shrink-0" disabled={denied || searching || !search.trim()} type="submit">
+            <button className="btn-secondary button-secondary shrink-0" disabled={denied || searching || !search.trim()} type="submit">
               {searching ? 'Searching…' : 'Search'}
             </button>
           </form>
         </section>
 
+        {/* Dashboard Cards: Trust Score Card & Access Status Card */}
+        <section className="grid gap-4 sm:grid-cols-2">
+          {/* Card 1: Trust Score Card */}
+          <div className="card p-5 sm:p-6 flex items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow">CONTINUOUS SESSION TRUST</p>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-text tabular-nums">{trustScore}</span>
+                <span className="text-xs font-semibold text-faint">/ 100</span>
+                <span className={`ml-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${trustLevel.bg} ${trustLevel.color}`}>
+                  {trustLevel.label}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                Confidence score calculated from device profile, network, and request velocity.
+              </p>
+            </div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-brand/30 bg-brand/10 text-brand shadow-glow-sm">
+              <ShieldCheck size={26} aria-hidden="true" />
+            </div>
+          </div>
+
+          {/* Card 2: Access Status Card */}
+          <div className="card p-5 sm:p-6 flex items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow">CURRENT ACCESS STATUS</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${
+                  denied
+                    ? 'border-danger/40 bg-danger/10 text-danger'
+                    : restricted
+                      ? 'border-warning/40 bg-warning/10 text-warning'
+                      : 'border-success/40 bg-success/10 text-success'
+                }`}>
+                  {denied ? 'Denied / Contained' : restricted ? 'Restricted' : 'Allowed / Active'}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {denied
+                  ? 'Access halted. Security incident triggered.'
+                  : restricted
+                    ? 'Step-up verification required for protected files.'
+                    : 'Unrestricted access to all approved department assets.'}
+              </p>
+            </div>
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${
+              denied
+                ? 'border-danger/30 bg-danger/10 text-danger'
+                : restricted
+                  ? 'border-warning/30 bg-warning/10 text-warning'
+                  : 'border-success/30 bg-success/10 text-success'
+            }`}>
+              {denied ? <Lock size={24} /> : restricted ? <Lock size={24} /> : <Unlock size={24} />}
+            </div>
+          </div>
+        </section>
+
+        {/* Search Result or Selected Resource Decision */}
         {searchDecision && (
           <ResourceViewer
             disabled={denied}
@@ -144,10 +215,10 @@ export default function Portal() {
         )}
 
         {openingResource && (
-          <div className="surface"><Spinner label="Evaluating resource access" /></div>
+          <div className="card"><Spinner label="Evaluating resource access" /></div>
         )}
         {selectedResource && resourceDecision && (
-          <div className="surface p-5 sm:p-6">
+          <div className="card p-5 sm:p-6">
             <ResourceViewer
               disabled={denied}
               resource={selectedResource}
@@ -156,13 +227,14 @@ export default function Portal() {
           </div>
         )}
 
-        <section className="surface overflow-hidden">
-          <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
+        {/* Clean Resource Table */}
+        <section className="card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border bg-surface-2/40 px-5 py-4 sm:px-6">
             <div>
-              <h2 className="font-semibold text-white">Company resources</h2>
-              <p className="mt-1 text-xs text-slate-500">{resources.length} available to your account</p>
+              <h2 className="font-bold text-text">Company Resources</h2>
+              <p className="mt-0.5 text-xs text-muted">{resources.length} accessible documents and databases</p>
             </div>
-            <span className="hidden rounded-full border border-white/[0.07] px-2.5 py-1 text-[10px] uppercase tracking-wide text-slate-500 sm:inline-flex">
+            <span className="hidden rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted sm:inline-flex">
               Policy monitored
             </span>
           </div>
@@ -172,37 +244,75 @@ export default function Portal() {
           ) : resources.length === 0 ? (
             <EmptyState title="No resources available" description="There are no company resources available to your account right now." />
           ) : (
-            <div className="divide-y divide-white/[0.05]">
+            <div className="divide-y divide-border/60">
               {groups.map(([department, departmentResources]) => (
                 <section key={department}>
-                  <h3 className="bg-white/[0.015] px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:px-6">
-                    {department}
-                  </h3>
-                  <ul className="divide-y divide-white/[0.04]">
-                    {departmentResources.map((resource) => {
-                      const Icon = typeIcons[resource.type] || File
-                      const isSelected = selectedResource?.id === resource.id
-                      return (
-                        <li key={resource.id}>
-                          <button
-                            className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.025] disabled:cursor-not-allowed disabled:opacity-45 sm:px-6 ${isSelected ? 'bg-accent/[0.04]' : ''}`}
-                            disabled={denied}
-                            onClick={() => openResource(resource)}
-                            type="button"
-                          >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.02] text-slate-400">
-                              <Icon size={16} aria-hidden="true" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium text-slate-200">{resource.name}</span>
-                              <span className="mt-1 block text-[11px] capitalize text-slate-500">{resource.type}</span>
-                            </span>
-                            <SeverityBadge value={resource.sensitivity} />
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
+                  <div className="bg-surface-2/60 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-muted sm:px-6 flex items-center justify-between">
+                    <span>{department}</span>
+                    <span className="text-[10px] font-mono text-faint">{departmentResources.length} files</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-left">
+                      <thead>
+                        <tr className="border-b border-border/40 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+                          <th className="px-5 py-2.5 sm:px-6">Document Name</th>
+                          <th className="px-4 py-2.5">Type</th>
+                          <th className="px-4 py-2.5">Sensitivity</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="px-5 py-2.5 text-right sm:px-6">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {departmentResources.map((resource) => {
+                          const Icon = typeIcons[resource.type] || File
+                          const isSelected = selectedResource?.id === resource.id
+                          return (
+                            <tr
+                              key={resource.id}
+                              className={`transition-colors hover:bg-surface-2/70 ${isSelected ? 'bg-brand/10' : ''}`}
+                            >
+                              <td className="px-5 py-3 sm:px-6">
+                                <div className="flex items-center gap-3">
+                                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-2 text-brand">
+                                    <Icon size={15} aria-hidden="true" />
+                                  </span>
+                                  <span className="truncate text-xs sm:text-sm font-semibold text-text max-w-xs sm:max-w-md">
+                                    {resource.name}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-xs capitalize text-muted">
+                                {resource.type}
+                              </td>
+                              <td className="px-4 py-3">
+                                <SeverityBadge value={resource.sensitivity} />
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                                  denied
+                                    ? 'border-danger/30 bg-danger/10 text-danger'
+                                    : 'border-success/30 bg-success/10 text-success'
+                                }`}>
+                                  {denied ? 'Locked' : 'Available'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3 text-right sm:px-6">
+                                <button
+                                  className="btn-secondary button-secondary min-h-8 px-3 py-1 text-xs"
+                                  disabled={denied}
+                                  onClick={() => openResource(resource)}
+                                  type="button"
+                                >
+                                  Open
+                                  <ArrowRight size={12} aria-hidden="true" />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </section>
               ))}
             </div>

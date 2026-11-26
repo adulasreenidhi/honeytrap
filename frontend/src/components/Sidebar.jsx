@@ -82,16 +82,30 @@ export default function Sidebar() {
             </NavLink>
           </div>
         ) : (
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 space-y-4">
             {sections.map((section) => {
               const links = section.links.filter((link) => !link.roles || link.roles.includes(user?.role))
-              return (
-                <details className="admin-nav-group" key={section.label} open={wideScreen}>
-                  <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint hover:text-muted lg:hidden">
+              return wideScreen ? (
+                <div key={section.label} className="space-y-1">
+                  <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+                    {section.label}
+                  </p>
+                  <div className="space-y-1">
+                    {links.map(({ to, label, icon: Icon, end }) => (
+                      <NavLink end={end || to === '/admin/incidents' || to === '/admin/reports'} key={to} to={to} className={linkClass}>
+                        <Icon size={16} aria-hidden="true" />
+                        {label}
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <details className="admin-nav-group" key={section.label} open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint hover:text-muted">
                     {section.label}
                     <span aria-hidden="true">⌄</span>
                   </summary>
-                  <div className="admin-nav-links space-y-1">
+                  <div className="admin-nav-links mt-1 space-y-1">
                     {links.map(({ to, label, icon: Icon, end }) => (
                       <NavLink end={end || to === '/admin/incidents' || to === '/admin/reports'} key={to} to={to} className={linkClass}>
                         <Icon size={16} aria-hidden="true" />

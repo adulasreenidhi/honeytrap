@@ -214,13 +214,13 @@ export default function Login() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="field-label" htmlFor="device">Device profile</label>
-                <select className="input text-field mt-1.5" id="device" onChange={(event) => setDeviceId(event.target.value)} value={deviceId}>
+                <select className="input text-field mt-1.5 truncate pr-8" id="device" onChange={(event) => setDeviceId(event.target.value)} value={deviceId}>
                   {DEVICE_PROFILES.map((device) => <option key={device.id} value={device.id}>{device.label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="field-label" htmlFor="location">Location</label>
-                <select className="input text-field mt-1.5" id="location" onChange={(event) => setLocation(event.target.value)} value={location}>
+                <select className="input text-field mt-1.5 truncate pr-8" id="location" onChange={(event) => setLocation(event.target.value)} value={location}>
                   {LOCATIONS.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
               </div>

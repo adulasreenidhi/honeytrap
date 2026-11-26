@@ -64,28 +64,34 @@ export default function Policies() {
       <div className="space-y-6">
         <section>
           <p className="eyebrow">MANAGE POLICY</p>
-          <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Policies</h1>
-          <p className="mt-2 text-sm text-slate-400">Configure synthetic trust weights and detection windows.</p>
-          {!isAdmin && <p className="mt-3 inline-flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/[0.05] px-3 py-2 text-xs text-blue-200"><ShieldCheck size={14} />Read-only view for analyst role</p>}
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-text sm:text-3xl">Policies</h1>
+          <p className="mt-2 text-sm text-muted">Configure synthetic trust weights and detection windows.</p>
+          {!isAdmin && (
+            <p className="mt-3 inline-flex items-center gap-2 rounded-xl border border-brand/30 bg-brand/10 px-3.5 py-2 text-xs text-brand-light">
+              <ShieldCheck size={14} />Read-only view for analyst role
+            </p>
+          )}
         </section>
 
-        {loading ? <div className="surface"><Spinner label="Loading policies" /></div> : groups.map((group) => {
+        {loading ? <div className="card"><Spinner label="Loading policies" /></div> : groups.map((group) => {
           const members = group.keys.map((key) => policies.find((policy) => policy.rule_key === key)).filter(Boolean)
           return (
-            <section className="surface overflow-hidden" key={group.title}>
-              <div className="border-b border-white/[0.06] px-5 py-4"><h2 className="text-sm font-semibold text-white">{group.title}</h2></div>
+            <section className="card overflow-hidden" key={group.title}>
+              <div className="border-b border-border bg-surface-2/40 px-5 py-4">
+                <h2 className="text-sm font-bold text-text">{group.title}</h2>
+              </div>
               {members.length ? (
-                <div className="divide-y divide-white/[0.05]">
+                <div className="divide-y divide-border/60">
                   {members.map((policy) => (
                     <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(160px,0.8fr)_minmax(180px,1fr)_110px_90px_100px] lg:items-center" key={policy.id}>
                       <div>
-                        <p className="text-sm font-medium text-slate-200">{policy.name}</p>
-                        <p className="mt-1 font-mono text-[10px] text-slate-600">{policy.rule_key}</p>
+                        <p className="text-sm font-semibold text-text">{policy.name}</p>
+                        <p className="mt-0.5 font-mono text-[10px] text-faint">{policy.rule_key}</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <input
                           aria-label={`${policy.name} value slider`}
-                          className="h-1.5 min-w-0 flex-1 cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-1.5 min-w-0 flex-1 cursor-pointer accent-brand disabled:cursor-not-allowed disabled:opacity-40"
                           disabled={!isAdmin}
                           max={group.max}
                           min={group.min}
@@ -95,7 +101,7 @@ export default function Policies() {
                         />
                         <input
                           aria-label={`${policy.name} numeric value`}
-                          className="text-field w-24 py-2 text-right font-mono text-xs"
+                          className="input text-field w-24 py-1.5 text-right font-mono text-xs tabular-nums"
                           disabled={!isAdmin}
                           max={group.max}
                           min={group.min}
@@ -104,19 +110,19 @@ export default function Policies() {
                           value={policy.value}
                         />
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                         <input
                           checked={policy.enabled}
-                          className="h-4 w-4 accent-accent"
+                          className="h-4 w-4 rounded accent-brand"
                           disabled={!isAdmin}
                           onChange={(event) => updateLocal(policy.id, { enabled: event.target.checked })}
                           type="checkbox"
                         />
                         Enabled
                       </label>
-                      <span className="text-[10px] text-slate-600">Range {group.min}–{group.max}</span>
+                      <span className="text-[10px] text-faint tabular-nums">Range {group.min}–{group.max}</span>
                       <button
-                        className="button-primary min-h-9 px-3 py-1.5 text-xs"
+                        className="btn-primary button-primary min-h-9 px-3.5 py-1.5 text-xs shadow-glow-sm"
                         disabled={!isAdmin || !isDirty(policy) || savingId === policy.id}
                         onClick={() => save(policy, group.min, group.max)}
                         type="button"
@@ -126,7 +132,7 @@ export default function Policies() {
                     </div>
                   ))}
                 </div>
-              ) : <p className="px-5 py-6 text-xs text-slate-500">Policy records are not available.</p>}
+              ) : <p className="px-5 py-6 text-xs text-muted">Policy records are not available.</p>}
             </section>
           )
         })}

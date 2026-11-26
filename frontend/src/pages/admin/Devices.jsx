@@ -10,10 +10,10 @@ import { notify } from '../../utils/notify.js'
 
 const statuses = ['registered', 'unknown', 'unverified', 'revoked']
 const statusStyles = {
-  registered: 'bg-allow/10 text-allow ring-allow/20',
-  unknown: 'bg-warning/10 text-amber-300 ring-warning/20',
-  unverified: 'bg-orange-500/10 text-orange-300 ring-orange-500/20',
-  revoked: 'bg-critical/10 text-red-300 ring-critical/20',
+  registered: 'border-success/30 bg-success/10 text-success',
+  unknown: 'border-warning/30 bg-warning/10 text-warning',
+  unverified: 'border-brand/35 bg-brand/10 text-brand-light',
+  revoked: 'border-danger/30 bg-danger/10 text-danger',
 }
 
 export default function Devices() {
@@ -98,19 +98,19 @@ export default function Devices() {
   }
 
   const columns = [
-    { key: 'device_id', header: 'Device ID', render: (device) => <span className="font-mono text-slate-200">{device.device_id}</span> },
-    { key: 'label', header: 'Label' },
+    { key: 'device_id', header: 'Device ID', render: (device) => <span className="font-mono font-medium text-text">{device.device_id}</span> },
+    { key: 'label', header: 'Label', render: (device) => <span className="text-muted">{device.label}</span> },
     {
       key: 'status',
       header: 'Status',
       render: (device) => (
         <select
           aria-label={`Status for ${device.device_id}`}
-          className={`rounded-full border-0 px-2.5 py-1 text-[10px] font-semibold uppercase ring-1 ring-inset ${statusStyles[device.status] || statusStyles.unverified}`}
+          className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider focus:outline-none ${statusStyles[device.status] || statusStyles.unverified}`}
           onChange={(event) => changeStatus(device, event.target.value)}
           value={device.status}
         >
-          {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+          {statuses.map((status) => <option key={status} value={status} className="bg-surface text-text">{status}</option>)}
         </select>
       ),
     },
@@ -121,7 +121,7 @@ export default function Devices() {
         <div className="flex gap-1">
           <button
             aria-label={`Edit ${device.device_id}`}
-            className="rounded-md p-2 text-slate-400 hover:bg-white/[0.05] hover:text-blue-300"
+            className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-brand-light transition-colors"
             onClick={() => {
               setEditing(device)
               setForm({ device_id: device.device_id, label: device.label, status: device.status })
@@ -130,7 +130,7 @@ export default function Devices() {
             }}
             type="button"
           ><Pencil size={14} /></button>
-          <button aria-label={`Delete ${device.device_id}`} className="rounded-md p-2 text-slate-500 hover:bg-critical/10 hover:text-critical" onClick={() => setPendingDelete(device)} type="button"><Trash2 size={14} /></button>
+          <button aria-label={`Delete ${device.device_id}`} className="rounded-lg p-2 text-muted hover:bg-danger/10 hover:text-danger transition-colors" onClick={() => setPendingDelete(device)} type="button"><Trash2 size={14} /></button>
         </div>
       ),
     },
@@ -142,13 +142,15 @@ export default function Devices() {
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="eyebrow">MANAGE ACCESS</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Devices</h1>
-            <p className="mt-2 text-sm text-slate-400">Maintain synthetic device registrations and trust status.</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-text sm:text-3xl">Devices</h1>
+            <p className="mt-2 text-sm text-muted">Maintain synthetic device registrations and trust status.</p>
           </div>
-          <button className="button-primary" onClick={() => { setEditing(null); setForm({ device_id: '', label: '', status: 'unverified' }); setFormError(''); setModalOpen(true) }} type="button"><Plus size={16} />Add device</button>
+          <button className="btn-primary button-primary shadow-glow-sm" onClick={() => { setEditing(null); setForm({ device_id: '', label: '', status: 'unverified' }); setFormError(''); setModalOpen(true) }} type="button">
+            <Plus size={16} />Add device
+          </button>
         </section>
-        <section className="surface overflow-hidden">
-          <div className="border-b border-white/[0.06] px-5 py-4"><h2 className="text-sm font-semibold text-white">Device inventory</h2></div>
+        <section className="card overflow-hidden">
+          <div className="border-b border-border bg-surface-2/40 px-5 py-4"><h2 className="text-sm font-bold text-text">Device inventory</h2></div>
           <DataTable columns={columns} emptyTitle="No devices found" loading={loading} rows={devices} />
         </section>
       </div>
@@ -159,13 +161,16 @@ export default function Devices() {
           <FormField id="device-label" label="Label" onChange={(value) => setForm((current) => ({ ...current, label: value }))} required value={form.label} />
           <div>
             <span className="field-label">Status</span>
-            <p className="mt-1.5 text-sm capitalize text-slate-400">
+            <p className="mt-1.5 text-sm capitalize text-muted">
               {editing ? editing.status : 'unverified'}
-              <span className="ml-2 text-[11px] text-slate-600">Change status in the inventory row.</span>
+              <span className="ml-2 text-[11px] text-faint">Change status in the inventory row.</span>
             </p>
           </div>
-          {formError && <p className="text-xs text-red-300" role="alert">{formError}</p>}
-          <div className="flex justify-end gap-2"><button className="button-secondary" onClick={() => setModalOpen(false)} type="button">Cancel</button><button className="button-primary" disabled={saving} type="submit">{saving ? 'Saving…' : editing ? 'Save changes' : 'Create device'}</button></div>
+          {formError && <p className="text-xs text-danger font-medium" role="alert">{formError}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <button className="btn-secondary button-secondary" onClick={() => setModalOpen(false)} type="button">Cancel</button>
+            <button className="btn-primary button-primary" disabled={saving} type="submit">{saving ? 'Saving…' : editing ? 'Save changes' : 'Create device'}</button>
+          </div>
         </form>
       </Modal>
 

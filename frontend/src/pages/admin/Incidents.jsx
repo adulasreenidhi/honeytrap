@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
+import { ArrowRight, Siren } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { listIncidents } from '../../api/client.js'
-import DataTable from '../../components/DataTable.jsx'
+import EmptyState from '../../components/EmptyState.jsx'
 import FilterBar from '../../components/FilterBar.jsx'
 import Layout from '../../components/Layout.jsx'
 import Pagination from '../../components/Pagination.jsx'
 import SeverityBadge from '../../components/SeverityBadge.jsx'
+import Spinner from '../../components/Spinner.jsx'
 import { formatTime } from '../../utils/format.js'
 import { notify } from '../../utils/notify.js'
 
@@ -37,28 +39,6 @@ export default function Incidents() {
     return () => { active = false }
   }, [filters, page, pageSize])
 
-  const columns = [
-    { key: 'severity', header: 'Severity', render: (incident) => <SeverityBadge value={incident.severity} /> },
-    {
-      key: 'title',
-      header: 'Incident',
-      render: (incident) => (
-        <div className="max-w-xl">
-          <Link className="font-medium text-slate-200 hover:text-blue-300" to={`/admin/incidents/${incident.id}`}>{incident.title}</Link>
-          <p className="mt-1 text-[11px] leading-5 text-slate-500">An indicator of compromise requiring investigation.</p>
-        </div>
-      ),
-    },
-    { key: 'status', header: 'Status', render: (incident) => <span className="capitalize text-slate-400">{incident.status}</span> },
-    { key: 'session_id', header: 'Session', render: (incident) => <span className="font-mono text-slate-400">#{incident.session_id}</span> },
-    { key: 'created_at', header: 'Created', render: (incident) => formatTime(incident.created_at, true) },
-    {
-      key: 'open',
-      header: '',
-      render: (incident) => <Link className="text-xs font-medium text-blue-300 hover:text-blue-200" to={`/admin/incidents/${incident.id}`}>Review</Link>,
-    },
-  ]
-
   function changeFilter(name, value) {
     setLoading(true)
     setFilters((current) => ({ ...current, [name]: value }))
@@ -69,11 +49,12 @@ export default function Incidents() {
     <Layout>
       <div className="space-y-6">
         <section>
-          <p className="eyebrow">INVESTIGATION</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Incidents</h1>
-          <p className="mt-2 text-sm text-slate-400">Indicators of compromise requiring investigation.</p>
+          <p className="eyebrow">INVESTIGATION WORKFLOW</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-text sm:text-3xl">Incidents</h1>
+          <p className="mt-1 text-sm text-muted">Active threat investigations, forensic timeline evidence, and mitigation actions.</p>
         </section>
-        <section className="surface p-4 sm:p-5">
+
+        <section className="card p-4 sm:p-5">
           <FilterBar
             filters={[
               { name: 'severity', label: 'Severity', options: ['low', 'medium', 'high', 'critical'].map((value) => ({ value, label: value })) },
@@ -84,19 +65,93 @@ export default function Incidents() {
             values={filters}
           />
         </section>
-        <section className="surface overflow-hidden">
-          <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
-            <h2 className="text-sm font-semibold text-white">Incident queue</h2>
-            <span className="text-xs text-slate-500">{total} total</span>
+
+        <section className="card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border bg-surface-2/40 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <Siren size={17} className="text-brand" aria-hidden="true" />
+              <h2 className="text-sm font-bold text-text">Incident Queue</h2>
+            </div>
+            <span className="text-xs text-muted tabular-nums">{total} total incidents</span>
           </div>
-          <DataTable
-            columns={columns}
-            emptyDescription="Try changing the active filters."
-            emptyTitle="No incidents match"
-            loading={loading}
-            rows={incidents}
-            rowClassName={(incident) => incident.severity === 'critical' ? 'bg-critical/[0.035]' : ''}
-          />
+
+          {loading ? (
+            <Spinner label="Loading incident records" />
+          ) : incidents.length === 0 ? (
+            <EmptyState title="No incidents match" description="Try changing the active filters or check back later." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-border/40 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint bg-surface-2/20">
+                    <th className="px-5 py-3">Incident ID</th>
+                    <th className="px-4 py-3">Title & Summary</th>
+                    <th className="px-4 py-3">Severity</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Session</th>
+                    <th className="px-4 py-3">Created</th>
+                    <th className="px-5 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {incidents.map((incident) => {
+                    const isCritical = incident.severity === 'critical'
+                    return (
+                      <tr
+                        key={incident.id}
+                        className={`transition-colors hover:bg-surface-2/70 ${isCritical ? 'bg-danger/[0.04]' : ''}`}
+                      >
+                        <td className="px-5 py-3.5 font-mono text-xs font-bold text-text">
+                          #{incident.id}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <Link
+                            to={`/admin/incidents/${incident.id}`}
+                            className="font-bold text-xs sm:text-sm text-text hover:text-brand-light transition-colors block"
+                          >
+                            {incident.title}
+                          </Link>
+                          <p className="mt-0.5 max-w-lg text-[11px] text-muted truncate">
+                            {incident.summary || 'An indicator of compromise requiring investigation.'}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <SeverityBadge value={incident.severity} />
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                            incident.status === 'open'
+                              ? 'border-danger/30 bg-danger/10 text-danger'
+                              : incident.status === 'investigating'
+                                ? 'border-warning/30 bg-warning/10 text-warning'
+                                : 'border-success/30 bg-success/10 text-success'
+                          }`}>
+                            {incident.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-xs text-muted">
+                          #{incident.session_id}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-faint tabular-nums">
+                          {formatTime(incident.created_at, true)}
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <Link
+                            className="btn-secondary button-secondary min-h-8 px-3 py-1 text-xs"
+                            to={`/admin/incidents/${incident.id}`}
+                          >
+                            Review
+                            <ArrowRight size={12} aria-hidden="true" />
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <Pagination
             disabled={loading}
             onChange={(nextPage, nextPageSize) => { setLoading(true); setPage(nextPage); setPageSize(nextPageSize) }}

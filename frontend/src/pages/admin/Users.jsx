@@ -116,15 +116,15 @@ export default function Users() {
   }
 
   const columns = [
-    { key: 'username', header: 'User', render: (user) => <span className="font-medium text-slate-200">{user.username}</span> },
-    { key: 'email', header: 'Email' },
-    { key: 'role', header: 'Role', render: (user) => <span className="capitalize">{user.role}</span> },
-    { key: 'department', header: 'Department' },
+    { key: 'username', header: 'User', render: (user) => <span className="font-semibold text-text">{user.username}</span> },
+    { key: 'email', header: 'Email', render: (user) => <span className="text-muted">{user.email}</span> },
+    { key: 'role', header: 'Role', render: (user) => <span className="capitalize text-muted font-medium">{user.role}</span> },
+    { key: 'department', header: 'Department', render: (user) => <span className="text-muted">{user.department}</span> },
     {
       key: 'status',
       header: 'Status',
       render: (user) => (
-        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${user.status === 'suspended' ? 'bg-critical/10 text-red-300' : 'bg-allow/10 text-allow'}`}>
+        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${user.status === 'suspended' ? 'border-danger/30 bg-danger/10 text-danger' : 'border-success/30 bg-success/10 text-success'}`}>
           {user.status}
         </span>
       ),
@@ -134,8 +134,8 @@ export default function Users() {
       header: 'Actions',
       render: (user) => (
         <div className="flex gap-1">
-          <button aria-label={`Edit ${user.username}`} className="rounded-md p-2 text-slate-400 hover:bg-white/[0.05] hover:text-blue-300" onClick={() => openEdit(user)} type="button"><Pencil size={14} /></button>
-          <button aria-label={`Delete ${user.username}`} className="rounded-md p-2 text-slate-400 hover:bg-critical/10 hover:text-critical" onClick={() => setDeleteTarget(user)} type="button"><Trash2 size={14} /></button>
+          <button aria-label={`Edit ${user.username}`} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-brand-light transition-colors" onClick={() => openEdit(user)} type="button"><Pencil size={14} /></button>
+          <button aria-label={`Delete ${user.username}`} className="rounded-lg p-2 text-muted hover:bg-danger/10 hover:text-danger transition-colors" onClick={() => setDeleteTarget(user)} type="button"><Trash2 size={14} /></button>
         </div>
       ),
     },
@@ -147,14 +147,16 @@ export default function Users() {
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="eyebrow">MANAGE ACCESS</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Users</h1>
-            <p className="mt-2 text-sm text-slate-400">Manage synthetic HoneyGate accounts and roles.</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-text sm:text-3xl">Users</h1>
+            <p className="mt-2 text-sm text-muted">Manage synthetic accounts and roles.</p>
           </div>
-          <button className="button-primary" onClick={openCreate} type="button"><Plus size={16} />Create user</button>
+          <button className="btn-primary button-primary shadow-glow-sm" onClick={openCreate} type="button">
+            <Plus size={16} />Create user
+          </button>
         </section>
 
-        <section className="surface overflow-hidden">
-          <div className="border-b border-white/[0.06] px-5 py-4"><h2 className="text-sm font-semibold text-white">User directory</h2></div>
+        <section className="card overflow-hidden">
+          <div className="border-b border-border bg-surface-2/40 px-5 py-4"><h2 className="text-sm font-bold text-text">User directory</h2></div>
           <DataTable columns={columns} emptyTitle="No users found" loading={loading} rows={users} />
         </section>
       </div>
@@ -174,10 +176,10 @@ export default function Users() {
             <FormField id="user-department" label="Department" onChange={(value) => changeField('department', value)} required value={form.department} />
           </div>
           <FormField as="select" id="user-status" label="Status" onChange={(value) => changeField('status', value)} options={[{ value: 'active', label: 'Active' }, { value: 'suspended', label: 'Suspended' }]} value={form.status} />
-          {formMessage && <p className="rounded-lg border border-critical/25 bg-critical/[0.06] px-3 py-2.5 text-xs text-red-300" role="alert">{formMessage}</p>}
+          {formMessage && <p className="rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-xs text-danger font-medium" role="alert">{formMessage}</p>}
           <div className="flex justify-end gap-2 pt-2">
-            <button className="button-secondary" disabled={saving} onClick={() => setModalOpen(false)} type="button">Cancel</button>
-            <button className="button-primary" disabled={saving} type="submit">{saving ? 'Saving…' : editingUser ? 'Save changes' : 'Create user'}</button>
+            <button className="btn-secondary button-secondary" disabled={saving} onClick={() => setModalOpen(false)} type="button">Cancel</button>
+            <button className="btn-primary button-primary" disabled={saving} type="submit">{saving ? 'Saving…' : editingUser ? 'Save changes' : 'Create user'}</button>
           </div>
         </form>
       </Modal>

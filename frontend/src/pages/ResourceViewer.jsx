@@ -44,16 +44,16 @@ export default function ResourceViewer({ resource, result, title, disabled }) {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="eyebrow">RESOURCE VIEWER</p>
-            <h2 className="mt-2 break-all text-lg font-semibold text-white">{resource.name}</h2>
-            <p className="mt-1 text-xs text-slate-500">{resource.department} · {resource.type}</p>
+            <h2 className="mt-2 break-all text-lg font-bold text-text">{resource.name}</h2>
+            <p className="mt-1 text-xs text-muted">{resource.department} · {resource.type}</p>
           </div>
-          <KeyRound size={18} className="mt-1 shrink-0 text-slate-500" aria-hidden="true" />
+          <KeyRound size={18} className="mt-1 shrink-0 text-faint" aria-hidden="true" />
         </div>
       )}
       {!resource && title && (
         <div>
           <p className="eyebrow">SEARCH DECISION</p>
-          <h2 className="mt-2 text-lg font-semibold text-white">{title}</h2>
+          <h2 className="mt-2 text-lg font-bold text-text">{title}</h2>
         </div>
       )}
       <DecisionBanner
@@ -62,14 +62,14 @@ export default function ResourceViewer({ resource, result, title, disabled }) {
         verifyDisabled={disabled}
       />
       {verificationMessage && (
-        <p className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm text-slate-300" role="status">
+        <p className="rounded-xl border border-border bg-surface-2/70 px-4 py-3 text-sm text-text" role="status">
           {verificationMessage}
         </p>
       )}
 
       {isVerifyOpen && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !isVerifying) setIsVerifyOpen(false)
           }}
@@ -77,25 +77,25 @@ export default function ResourceViewer({ resource, result, title, disabled }) {
           <section
             aria-labelledby="verify-title"
             aria-modal="true"
-            className="w-full max-w-md rounded-2xl border border-white/10 bg-navy-900 p-6 shadow-2xl"
+            className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-2xl ring-1 ring-border-glow"
             role="dialog"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="eyebrow">STEP-UP VERIFICATION</p>
-                <h2 className="mt-2 text-lg font-semibold text-white" id="verify-title">Verify your identity</h2>
+                <h2 className="mt-2 text-lg font-bold text-text" id="verify-title">Verify your identity</h2>
               </div>
               <button
                 type="button"
                 aria-label="Close verification dialog"
-                className="rounded-md p-1 text-slate-500 hover:bg-white/5 hover:text-white"
+                className="rounded-lg p-1 text-muted hover:bg-surface-2 hover:text-text transition-colors"
                 disabled={isVerifying}
                 onClick={() => setIsVerifyOpen(false)}
               >
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
+            <p className="mt-3 text-sm leading-6 text-muted">
               Enter the simulated one-time code to request a fresh trust assessment.
             </p>
             <form className="mt-5 space-y-4" onSubmit={handleVerify}>
@@ -103,7 +103,7 @@ export default function ResourceViewer({ resource, result, title, disabled }) {
                 <label className="field-label" htmlFor="otp">One-time code</label>
                 <input
                   autoComplete="one-time-code"
-                  className="text-field mt-2 font-mono tracking-[0.3em]"
+                  className="input text-field mt-2 font-mono tracking-[0.3em]"
                   disabled={disabled || isVerifying}
                   id="otp"
                   inputMode="numeric"
@@ -114,7 +114,7 @@ export default function ResourceViewer({ resource, result, title, disabled }) {
                 />
               </div>
               <button
-                className="button-primary w-full"
+                className="btn-primary button-primary w-full shadow-glow-sm"
                 disabled={disabled || isVerifying || !otp.trim()}
                 type="submit"
               >
