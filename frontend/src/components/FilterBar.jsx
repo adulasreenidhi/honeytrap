@@ -8,7 +8,7 @@ export default function FilterBar({ filters, values, onChange, onReset }) {
           <label className="field-label" htmlFor={`filter-${filter.name}`}>{filter.label}</label>
           {filter.options ? (
             <select
-              className="text-field mt-1.5 min-w-full py-2 text-xs"
+              className="text-field input mt-1.5 min-w-full py-2 text-xs"
               id={`filter-${filter.name}`}
               onChange={(event) => onChange(filter.name, event.target.value)}
               value={values[filter.name] || ''}
@@ -20,7 +20,7 @@ export default function FilterBar({ filters, values, onChange, onReset }) {
             </select>
           ) : (
             <input
-              className="text-field mt-1.5 py-2 text-xs"
+              className="text-field input mt-1.5 py-2 text-xs"
               id={`filter-${filter.name}`}
               onChange={(event) => onChange(filter.name, event.target.value)}
               placeholder={filter.placeholder || ''}
@@ -30,7 +30,7 @@ export default function FilterBar({ filters, values, onChange, onReset }) {
           )}
         </div>
       ))}
-      <button className="button-secondary min-h-9 px-3 py-1.5 text-xs" onClick={onReset} type="button">
+      <button className="button-secondary btn-secondary min-h-9 px-3.5 py-1.5 text-xs" onClick={onReset} type="button">
         <RotateCcw size={13} aria-hidden="true" />
         Reset
       </button>

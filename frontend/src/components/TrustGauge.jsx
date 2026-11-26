@@ -6,8 +6,8 @@ export default function TrustGauge({ score }) {
 
   return (
     <div className="flex items-center gap-2.5" role="img" aria-label={`Session trust score ${safeScore} out of 100`}>
-      <svg className="h-10 w-10 -rotate-90" viewBox="0 0 40 40" aria-hidden="true">
-        <circle cx="20" cy="20" r="17" fill="none" stroke="#1e293b" strokeWidth="3" />
+      <svg className="h-10 w-10 -rotate-90 drop-shadow-[0_0_6px_rgba(249,115,22,0.15)]" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" fill="none" stroke="#2e2318" strokeWidth="3" />
         <circle
           cx="20"
           cy="20"
@@ -22,8 +22,11 @@ export default function TrustGauge({ score }) {
         />
       </svg>
       <div className="leading-tight">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Trust</p>
-        <p className="font-mono text-sm font-semibold text-white">{safeScore}<span className="text-slate-500">/100</span></p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Trust</p>
+        <p className="font-mono text-sm font-bold text-text tabular-nums">
+          {safeScore}
+          <span className="font-normal text-faint">/100</span>
+        </p>
       </div>
     </div>
   )

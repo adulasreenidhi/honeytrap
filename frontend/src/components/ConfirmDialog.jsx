@@ -11,12 +11,12 @@ export default function ConfirmDialog({
   tone = 'danger',
 }) {
   const confirmClass = tone === 'danger'
-    ? 'button-primary bg-critical hover:bg-red-500'
-    : 'button-primary'
+    ? 'btn-danger'
+    : 'btn-primary'
   return (
     <Modal open={open} onClose={onClose} title={title} description={description} size="max-w-md">
-      <div className="flex justify-end gap-2">
-        <button className="button-secondary" disabled={busy} onClick={onClose} type="button">Cancel</button>
+      <div className="flex justify-end gap-3 pt-2">
+        <button className="btn-secondary button-secondary" disabled={busy} onClick={onClose} type="button">Cancel</button>
         <button className={confirmClass} disabled={busy} onClick={onConfirm} type="button">
           {busy ? 'Working…' : confirmLabel}
         </button>

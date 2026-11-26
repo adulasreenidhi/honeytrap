@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import useAuth from '../context/useAuth.js'
+import BrandLogo from './BrandLogo.jsx'
 
 export default function Sidebar() {
   const { user } = useAuth()
@@ -25,6 +26,7 @@ export default function Sidebar() {
     media.addEventListener('change', update)
     return () => media.removeEventListener('change', update)
   }, [])
+
   const sections = [
     {
       label: 'Monitor',
@@ -57,34 +59,35 @@ export default function Sidebar() {
     },
   ]
 
-  const linkClass = ({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm ${isActive ? 'bg-accent/10 text-blue-300' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`
+  const linkClass = ({ isActive }) =>
+    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+      isActive
+        ? 'bg-gradient-to-r from-brand-light to-brand-dark text-white font-semibold shadow-glow-sm'
+        : 'text-muted hover:bg-surface-2 hover:text-text'
+    }`
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-white/[0.06] bg-navy-900/70 px-4 py-4 lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r lg:px-5 lg:py-7">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15 text-accent ring-1 ring-accent/25">
-          <ShieldCheck size={21} aria-hidden="true" />
-        </div>
-        <div>
-          <p className="text-sm font-bold tracking-wide text-white">HONEY<span className="text-accent">GATE</span></p>
-          <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">Continuous trust</p>
-        </div>
+    <aside className="flex w-full shrink-0 flex-col border-b border-border bg-surface/95 px-4 py-4 backdrop-blur-md lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r lg:px-5 lg:py-6">
+      <div className="flex items-center justify-between">
+        <BrandLogo size="md" tagline="Continuous trust" />
       </div>
 
-      <nav className="mt-8" aria-label="Primary navigation">
-        <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Workspace</p>
+      <nav className="mt-8 flex-1" aria-label="Primary navigation">
+        <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">Workspace</p>
         {user?.role === 'employee' ? (
-          <NavLink to="/portal" className={linkClass}>
-            <Building2 size={17} aria-hidden="true" />
-            Company Environment
-          </NavLink>
+          <div className="mt-2 space-y-1">
+            <NavLink to="/portal" className={linkClass}>
+              <Building2 size={17} aria-hidden="true" />
+              Company Environment
+            </NavLink>
+          </div>
         ) : (
-          <div className="mt-3 space-y-1">
+          <div className="mt-3 space-y-2">
             {sections.map((section) => {
               const links = section.links.filter((link) => !link.roles || link.roles.includes(user?.role))
               return (
                 <details className="admin-nav-group" key={section.label} open={wideScreen}>
-                  <summary className="flex cursor-pointer list-none items-center justify-between rounded-md px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600 hover:text-slate-400 lg:hidden">
+                  <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint hover:text-muted lg:hidden">
                     {section.label}
                     <span aria-hidden="true">⌄</span>
                   </summary>
@@ -103,12 +106,22 @@ export default function Sidebar() {
         )}
       </nav>
 
-      <div className="mt-5 border-t border-white/[0.06] pt-4 lg:mt-auto lg:pt-5">
-        <div className="flex items-center gap-2.5 px-3">
-          <span className="h-2 w-2 rounded-full bg-allow shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
-          <span className="text-xs text-slate-500">Monitoring active</span>
+      <div className="mt-6 border-t border-border pt-4 lg:mt-auto">
+        <div className="rounded-xl border border-border/80 bg-surface-2/60 p-3 shadow-inner">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand/15 text-brand ring-1 ring-brand/30">
+              <ShieldCheck size={16} aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-text">Secure. Detect. Trust.</p>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
+                <span className="text-[10px] text-muted">Monitoring active</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="mt-3 px-3 text-[10px] leading-4 text-slate-600">Prototype: all data and responses are simulated.</p>
+        <p className="mt-3 px-2 text-[10px] leading-4 text-faint">Prototype: all data and responses are simulated.</p>
       </div>
     </aside>
   )

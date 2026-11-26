@@ -16,7 +16,7 @@ export default function FormField({
   disabled = false,
 }) {
   const sharedProps = {
-    className: 'text-field mt-1.5',
+    className: 'text-field input mt-1.5',
     disabled,
     id,
     onChange: (event) => onChange(event.target.value),
@@ -25,7 +25,10 @@ export default function FormField({
   }
   return (
     <div>
-      <label className="field-label" htmlFor={id}>{label}{required && <span className="ml-1 text-critical">*</span>}</label>
+      <label className="field-label" htmlFor={id}>
+        {label}
+        {required && <span className="ml-1 text-danger">*</span>}
+      </label>
       {as === 'textarea' ? (
         <textarea {...sharedProps} className={`${sharedProps.className} min-h-24 resize-y`} placeholder={placeholder} />
       ) : as === 'select' ? (
@@ -37,8 +40,8 @@ export default function FormField({
       ) : (
         <input {...sharedProps} max={max} min={min} placeholder={placeholder} step={step} type={type} />
       )}
-      {hint && <p className="mt-1.5 text-[11px] leading-5 text-slate-500">{hint}</p>}
-      {error && <p className="mt-1.5 text-xs text-red-300" role="alert">{error}</p>}
+      {hint && <p className="mt-1.5 text-[11px] leading-5 text-faint">{hint}</p>}
+      {error && <p className="mt-1.5 text-xs font-medium text-danger" role="alert">{error}</p>}
     </div>
   )
 }

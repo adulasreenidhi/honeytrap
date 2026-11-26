@@ -56,7 +56,7 @@ export default function Modal({ open, onClose, title, description, children, siz
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-md"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -65,17 +65,22 @@ export default function Modal({ open, onClose, title, description, children, siz
         aria-describedby={descriptionId}
         aria-labelledby={titleId}
         aria-modal="true"
-        className={`my-auto w-full ${size} rounded-2xl border border-white/10 bg-navy-900 shadow-2xl`}
+        className={`my-auto w-full ${size} rounded-2xl border border-border bg-surface shadow-2xl ring-1 ring-border-glow`}
         ref={dialogRef}
         role="dialog"
         tabIndex={-1}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4 sm:px-6">
+        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div>
-            <h2 className="text-base font-semibold text-white" id={titleId}>{title}</h2>
-            {description && <p className="mt-1 text-xs leading-5 text-slate-400" id={descriptionId}>{description}</p>}
+            <h2 className="text-base font-bold text-text" id={titleId}>{title}</h2>
+            {description && <p className="mt-1 text-xs leading-5 text-muted" id={descriptionId}>{description}</p>}
           </div>
-          <button aria-label="Close dialog" className="rounded-md p-1.5 text-slate-500 hover:bg-white/[0.05] hover:text-white" onClick={onClose} type="button">
+          <button
+            aria-label="Close dialog"
+            className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-text transition-colors"
+            onClick={onClose}
+            type="button"
+          >
             <X size={17} aria-hidden="true" />
           </button>
         </header>

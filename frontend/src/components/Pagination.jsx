@@ -6,16 +6,16 @@ export default function Pagination({ page, pageSize, total, onChange, disabled =
   const end = Math.min(page * pageSize, total)
 
   return (
-    <div className="flex flex-col gap-3 border-t border-white/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-      <p className="text-xs text-slate-500">
-        Showing <span className="text-slate-300">{start}–{end}</span> of <span className="text-slate-300">{total}</span>
+    <div className="flex flex-col gap-3 border-t border-border bg-surface-2/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <p className="text-xs text-muted tabular-nums">
+        Showing <span className="font-semibold text-text">{start}–{end}</span> of <span className="font-semibold text-text">{total}</span>
       </p>
       <div className="flex items-center justify-between gap-3 sm:justify-end">
-        <label className="flex items-center gap-2 text-xs text-slate-500">
+        <label className="flex items-center gap-2 text-xs text-muted">
           Rows
           <select
             aria-label="Rows per page"
-            className="rounded-md border border-white/[0.08] bg-navy-950 px-2 py-1.5 text-xs text-slate-300"
+            className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-text focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/30"
             disabled={disabled}
             onChange={(event) => onChange(1, Number(event.target.value))}
             value={pageSize}
@@ -23,11 +23,11 @@ export default function Pagination({ page, pageSize, total, onChange, disabled =
             {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
           </select>
         </label>
-        <span className="text-xs text-slate-500">{page} / {pageCount}</span>
-        <div className="flex gap-1">
+        <span className="text-xs text-muted tabular-nums">{page} / {pageCount}</span>
+        <div className="flex gap-1.5">
           <button
             aria-label="Previous page"
-            className="rounded-md border border-white/[0.08] p-1.5 text-slate-400 hover:bg-white/[0.05] disabled:opacity-30"
+            className="rounded-lg border border-border bg-surface-2/80 p-1.5 text-muted hover:border-brand/40 hover:bg-elevated hover:text-text disabled:opacity-30 disabled:hover:border-border disabled:hover:bg-surface-2/80 transition-colors"
             disabled={disabled || page <= 1}
             onClick={() => onChange(page - 1, pageSize)}
             type="button"
@@ -36,7 +36,7 @@ export default function Pagination({ page, pageSize, total, onChange, disabled =
           </button>
           <button
             aria-label="Next page"
-            className="rounded-md border border-white/[0.08] p-1.5 text-slate-400 hover:bg-white/[0.05] disabled:opacity-30"
+            className="rounded-lg border border-border bg-surface-2/80 p-1.5 text-muted hover:border-brand/40 hover:bg-elevated hover:text-text disabled:opacity-30 disabled:hover:border-border disabled:hover:bg-surface-2/80 transition-colors"
             disabled={disabled || page >= pageCount}
             onClick={() => onChange(page + 1, pageSize)}
             type="button"
