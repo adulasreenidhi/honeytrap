@@ -59,5 +59,3 @@ python -m pytest -q
 python -m tests.simulations.validate_detection
 ```
 
-
-OpenCanary, Cowrie, T-Pot, NIST SP 800-207 (Zero Trust Architecture), MITRE ATT&CK
